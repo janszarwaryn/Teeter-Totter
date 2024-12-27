@@ -70,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import Button from '@/components/atoms/Button.vue';
 import Score from '@/components/atoms/Score.vue';
 import Timer from '@/components/molecules/Timer.vue';
@@ -109,6 +109,22 @@ const getBalanceText = computed(() => {
   if (props.bendingAngle < 10) return 'Stable';
   if (props.bendingAngle < 20) return 'Warning';
   return 'Unstable';
+});
+
+watch(() => props.isPlaying, (newValue) => {
+  if (newValue) {
+    timerRef.value?.start();
+  } else {
+    timerRef.value?.pause();
+  }
+});
+
+watch(() => props.isPaused, (newValue) => {
+  if (newValue) {
+    timerRef.value?.pause();
+  } else if (props.isPlaying) {
+    timerRef.value?.start();
+  }
 });
 
 const onTimeUp = () => {

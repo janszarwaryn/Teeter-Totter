@@ -6,7 +6,10 @@
         transform: `rotate(${bendingAngle}deg)`
       }"
     >
-      <div class="board">
+      <div 
+        class="board"
+        :class="{ stabilized: isStabilized }"
+      >
         <!-- Linie pomocnicze dla pozycjonowania -->
         <div class="grid-lines">
           <div v-for="i in 20" :key="i" class="grid-line"></div>
@@ -14,12 +17,20 @@
       </div>
       <div class="pivot"></div>
     </div>
+    <div 
+      v-if="isStabilized" 
+      class="stabilization-countdown"
+    >
+      {{ stabilizationTimeLeft }}
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 defineProps<{
   bendingAngle: number;
+  isStabilized: boolean;
+  stabilizationTimeLeft: number;
 }>();
 </script>
 
@@ -53,6 +64,12 @@ defineProps<{
   transform: translate(-50%, 0);
   border-radius: 4px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  transition: background-color 0.3s ease;
+}
+
+.board.stabilized {
+  background: linear-gradient(to right, #3498db, #2980b9);
+  box-shadow: 0 0 20px rgba(52, 152, 219, 0.5);
 }
 
 .grid-lines {
@@ -82,5 +99,23 @@ defineProps<{
   transform: translateX(-50%);
   clip-path: polygon(0% 0%, 100% 0%, 50% 100%);
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.stabilization-countdown {
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 48px;
+  font-weight: bold;
+  color: #3498db;
+  text-shadow: 0 0 10px rgba(52, 152, 219, 0.5);
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: translateX(-50%) scale(1); }
+  50% { transform: translateX(-50%) scale(1.2); }
+  100% { transform: translateX(-50%) scale(1); }
 }
 </style> 

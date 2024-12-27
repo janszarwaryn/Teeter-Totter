@@ -6,12 +6,12 @@ export const GAME_CONFIG = {
     GRID_INCREMENT: 50
   },
   PHYSICS: {
-    INITIAL_FALL_SPEED: 50,
-    ACCELERATION: 20,
-    MAX_FALL_SPEED: 200,
+    INITIAL_FALL_SPEED: 100,
+    ACCELERATION: 50,
+    MAX_FALL_SPEED: 400,
     COLLISION_THRESHOLD: 5, // Próg kolizji w pikselach
     MAX_ANGLE: 30, // Maksymalny kąt przechylenia
-    MOMENT_MULTIPLIER: 0.1 // Mnożnik momentu dla bardziej realistycznej fizyki
+    MOMENT_MULTIPLIER: 50 // Zmniejszamy mnożnik momentu dla lepszej kontroli
   }
 } as const;
 
@@ -40,22 +40,22 @@ export const CONTROLS = {
 export const GAME_PHASES = {
   PHASE_1: {
     name: 'Phase 1 - Light',
-    scoreRange: [0, 200],
+    scoreRange: [0, 30],
     weights: { min: 1, max: 2 }
   },
   PHASE_2: {
     name: 'Phase 2 - Medium',
-    scoreRange: [201, 500],
-    weights: { min: 1, max: 3 }
+    scoreRange: [31, 60],
+    weights: { min: 2, max: 4 }
   },
   PHASE_3: {
     name: 'Phase 3 - Heavy',
-    scoreRange: [501, 1000],
-    weights: { min: 1, max: 5 }
+    scoreRange: [61, 90],
+    weights: { min: 3, max: 6 }
   },
   PHASE_4: {
     name: 'Phase 4 - Expert',
-    scoreRange: [1001, Infinity],
-    weights: { min: 1, max: 8 }
+    scoreRange: [91, Infinity],
+    weights: { min: 4, max: 8 }
   }
 } as const; 

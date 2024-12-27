@@ -4,7 +4,7 @@ import type { GameObject, Position, Size } from '@/types/game';
 export const getCurrentPhase = (score: number) => {
   for (const phase of Object.values(GAME_PHASES)) {
     const [min, max] = phase.scoreRange;
-    if (score >= min && score <= max) {
+    if (score >= min && (score <= max || max === Infinity)) {
       return phase;
     }
   }
@@ -14,28 +14,9 @@ export const getCurrentPhase = (score: number) => {
 export const generateRandomObject = (score: number = 0): GameObject => {
   const currentPhase = getCurrentPhase(score);
   
-  // Losujemy czy generować obiekt z aktualnej fazy czy z wcześniejszej
-  const useCurrentPhase = Math.random() < 0.7; // 70% szans na obiekt z aktualnej fazy
-  
-  let minWeight, maxWeight;
-  if (useCurrentPhase) {
-    // Używamy wag z aktualnej fazy
-    minWeight = currentPhase.weights.min;
-    maxWeight = currentPhase.weights.max;
-  } else {
-    // Używamy wag z losowej wcześniejszej fazy
-    const phases = Object.values(GAME_PHASES);
-    const currentPhaseIndex = phases.indexOf(currentPhase);
-    if (currentPhaseIndex > 0) {
-      const randomPreviousPhase = phases[Math.floor(Math.random() * currentPhaseIndex)];
-      minWeight = randomPreviousPhase.weights.min;
-      maxWeight = randomPreviousPhase.weights.max;
-    } else {
-      // Jeśli jesteśmy w pierwszej fazie, używamy jej wag
-      minWeight = currentPhase.weights.min;
-      maxWeight = currentPhase.weights.max;
-    }
-  }
+  // Używamy wag z aktualnej fazy
+  const minWeight = currentPhase.weights.min;
+  const maxWeight = currentPhase.weights.max;
 
   // Losujemy wagę z wybranego zakresu
   const weight = Math.floor(Math.random() * (maxWeight - minWeight + 1)) + minWeight;

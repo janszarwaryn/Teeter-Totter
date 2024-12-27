@@ -29,6 +29,10 @@ export interface GameState {
   bendingAngle: number;
   isAutoPlay: boolean;
   throwsLeft: number;
+  isStabilized: boolean;
+  stabilizationTimeLeft: number;
+  gameTime: number;
+  bonusPoints: number;
 }
 
 export interface PhysicsState {

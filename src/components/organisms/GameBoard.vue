@@ -55,20 +55,25 @@
     <div v-if="store.isGameOver" class="game-over">
       <div class="game-over-content">
         <h2>Game Over!</h2>
-        <p>Your Time: {{ formatTime(store.score) }}</p>
+        <p class="final-score">Time Played: {{ formatTime(store.score) }}</p>
         <p v-if="isWinner" class="new-record">New Record!</p>
+        <p class="previous-record" v-if="!isWinner">
+          Best Time: {{ formatTime(store.highScore) }}
+        </p>
         <Button variant="primary" @click="handleReset">Play Again</Button>
       </div>
     </div>
 
-    <div v-if="showConfetti" class="confetti">
-      <div v-for="n in 50" :key="n" 
-           class="confetti-piece"
-           :style="{
-             left: Math.random() * 100 + '%',
-             transform: `scale(${Math.random()})`,
-             animation: `confetti-fall ${1 + Math.random() * 2}s linear forwards`
-           }"
+    <div v-if="showConfetti" class="confetti-container">
+      <div 
+        v-for="piece in confettiPieces" 
+        :key="piece.id"
+        class="confetti-piece"
+        :style="{
+          left: piece.left,
+          animationDelay: piece.animationDelay,
+          backgroundColor: piece.backgroundColor
+        }"
       ></div>
     </div>
   </div>
@@ -82,7 +87,7 @@ import Button from '@/components/atoms/Button.vue';
 import TeeterTotter from '@/components/organisms/TeeterTotter.vue';
 import ControlPanel from '@/components/molecules/ControlPanel.vue';
 import { CONTROLS, GAME_CONFIG } from '@/constants/gameConstants';
-import { detectCollision, updateFallSpeed } from '@/helpers/physics';
+import { detectCollision, updateFallSpeed, isObjectOverTeeterTotter } from '@/helpers/physics';
 
 const store = useGameStore();
 const gameArea = ref<HTMLElement | null>(null);
@@ -91,7 +96,7 @@ const showConfetti = ref(false);
 const isWinner = ref(false);
 
 let animationFrameId: number;
-let lastTimestamp: number = 0;
+let lastTime = ref(0);
 let currentFallSpeed = GAME_CONFIG.PHYSICS.INITIAL_FALL_SPEED;
 
 const BOARD_HEIGHT = GAME_CONFIG.BOARD.HEIGHT;
@@ -102,11 +107,15 @@ const COLLISION_THRESHOLD = GAME_CONFIG.PHYSICS.COLLISION_THRESHOLD;
 const handleReset = () => {
   showConfetti.value = false;
   isWinner.value = false;
-  currentFallSpeed = GAME_CONFIG.PHYSICS.INITIAL_FALL_SPEED;
-  lastTimestamp = 0;
+  cancelAnimationFrame(animationFrameId);
   store.reset();
+  lastTime.value = null;
+  currentFallSpeed = GAME_CONFIG.PHYSICS.INITIAL_FALL_SPEED;
   controlPanelRef.value?.resetTimer?.();
   gameArea.value?.focus();
+  
+  // Natychmiast restartujemy pętlę gry
+  animationFrameId = requestAnimationFrame(gameLoop);
 };
 
 const handleKeyPress = (event: KeyboardEvent) => {
@@ -142,69 +151,80 @@ const handleKeyUp = (event: KeyboardEvent) => {
 };
 
 const gameLoop = (timestamp: number) => {
-  if (!lastTimestamp) lastTimestamp = timestamp;
-  const deltaTime = timestamp - lastTimestamp;
-  lastTimestamp = timestamp;
+  if (!lastTime.value) {
+    lastTime.value = timestamp;
+  }
+  
+  const deltaTime = timestamp - lastTime.value;
+  lastTime.value = timestamp;
 
-  if (store.isPlaying && !store.isPaused && store.currentObject) {
+  // Upewniamy się, że gra jest w odpowiednim stanie
+  if (!store.isPlaying || store.isPaused || store.isGameOver) {
+    animationFrameId = requestAnimationFrame(gameLoop);
+    return;
+  }
+
+  // Sprawdzamy czy mamy aktywny obiekt
+  if (!store.currentObject) {
+    store.spawnNewObject();
+  }
+
+  if (store.currentObject) {
+    const objectHeight = store.currentObject.size.height;
     const movement = (currentFallSpeed * deltaTime) / 1000;
     const newY = store.currentObject.position.y + movement;
-
-    // Obliczamy środek obiektu
-    const objectCenterX = store.currentObject.position.x;
-    const objectWidth = store.currentObject.size.width;
-    const objectHeight = store.currentObject.size.height;
-    const objectBottom = newY + objectHeight;
+    const objectBottom = newY + objectHeight / 2;
     
-    // Sprawdzamy, czy obiekt jest nad huśtawką
-    const isOverTeeterTotter = Math.abs(objectCenterX - BOARD_CENTER_X) <= 400;
-    
-    // Sprawdzamy kolizje z innymi obiektami
-    const sideObjects = objectCenterX < BOARD_CENTER_X ? store.leftObjects : store.rightObjects;
-    
-    let hasCollision = false;
-    let collisionY = BOARD_SURFACE_Y;
+    // Sprawdź czy obiekt jest nad huśtawką
+    const isOverTeeterTotter = isObjectOverTeeterTotter(
+      store.currentObject.position,
+      store.currentObject.size.width
+    );
 
-    // Sprawdzamy kolizje z innymi obiektami
-    for (const obj of sideObjects) {
-      const horizontalOverlap = Math.abs(objectCenterX - obj.position.x) < (objectWidth + obj.size.width) / 2;
-      const verticalOverlap = Math.abs((newY + objectHeight / 2) - (obj.position.y + obj.size.height / 2)) < (objectHeight + obj.size.height) / 2;
-      
-      if (horizontalOverlap && verticalOverlap) {
-        hasCollision = true;
-        collisionY = obj.position.y - objectHeight - COLLISION_THRESHOLD;
-        break;
-      }
-    }
+    // Sprawdź kolizje z innymi obiektami
+    const leftCollision = detectCollision(store.currentObject, store.leftObjects);
+    const rightCollision = detectCollision(store.currentObject, store.rightObjects);
+    const collision = leftCollision.hasCollision ? leftCollision : rightCollision;
 
-    if (hasCollision) {
+    if (collision.hasCollision && collision.position) {
       // Kolizja z innym obiektem
-      store.currentObject.position.y = collisionY;
+      store.currentObject.position.y = collision.position.y;
       store.placeObject();
-      if (store.bendingAngle < 10) {
+      store.recalculateBendingAngle();
+      if (Math.abs(store.bendingAngle) < 10) {
         controlPanelRef.value?.addTimeBonus(5);
       }
       currentFallSpeed = GAME_CONFIG.PHYSICS.INITIAL_FALL_SPEED;
-    } else if (isOverTeeterTotter && objectBottom >= BOARD_SURFACE_Y - COLLISION_THRESHOLD) {
+    } else if (
+      isOverTeeterTotter && 
+      objectBottom >= GAME_CONFIG.BOARD.SURFACE_Y - GAME_CONFIG.PHYSICS.COLLISION_THRESHOLD
+    ) {
       // Kolizja z huśtawką
-      store.currentObject.position.y = BOARD_SURFACE_Y - objectHeight - COLLISION_THRESHOLD;
+      store.currentObject.position.y = 
+        GAME_CONFIG.BOARD.SURFACE_Y - 
+        (objectHeight / 2) - 
+        GAME_CONFIG.PHYSICS.COLLISION_THRESHOLD;
       store.placeObject();
+      store.recalculateBendingAngle();
       currentFallSpeed = GAME_CONFIG.PHYSICS.INITIAL_FALL_SPEED;
-    } else if (!isOverTeeterTotter && objectBottom >= BOARD_HEIGHT) {
-      // Obiekt minął huśtawkę - liczymy jako wyrzut
+    } else if (!isOverTeeterTotter && objectBottom >= GAME_CONFIG.BOARD.HEIGHT) {
+      // Obiekt minął huśtawkę
       if (store.throwsLeft > 0) {
         store.throwsLeft--;
-        store.spawnNewObject();
-      } else {
-        handleGameOver();
       }
+      if (store.throwsLeft <= 0) {
+        handleGameOver();
+        cancelAnimationFrame(animationFrameId);
+        return;
+      }
+      store.spawnNewObject();
+      currentFallSpeed = GAME_CONFIG.PHYSICS.INITIAL_FALL_SPEED;
     } else {
       // Kontynuuj spadanie
       store.currentObject.position.y = newY;
-    }
-
-    if (!store.isAutoPlay) {
-      currentFallSpeed = updateFallSpeed(currentFallSpeed, deltaTime);
+      if (!store.isAutoPlay) {
+        currentFallSpeed = updateFallSpeed(currentFallSpeed, deltaTime);
+      }
     }
   }
   
@@ -218,7 +238,9 @@ const handleTimeUp = () => {
 };
 
 const handleGameOver = () => {
+  if (store.isGameOver) return;
   const finalTime = controlPanelRef.value?.getTime() || 0;
+  store.updateScore(finalTime);
   if (finalTime > store.highScore) {
     store.highScore = finalTime;
     showConfetti.value = true;
@@ -226,6 +248,17 @@ const handleGameOver = () => {
   }
   store.endGame();
 };
+
+const generateConfetti = () => {
+  return Array.from({ length: 50 }).map((_, i) => ({
+    id: i,
+    left: Math.random() * 100 + '%',
+    animationDelay: Math.random() * 2 + 's',
+    backgroundColor: ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff'][Math.floor(Math.random() * 5)]
+  }));
+};
+
+const confettiPieces = ref(generateConfetti());
 
 const formatTime = (seconds: number): string => {
   const minutes = Math.floor(seconds / 60);
@@ -276,7 +309,6 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  margin-top: 80px;
 }
 
 .game-area:focus {
@@ -344,82 +376,36 @@ onUnmounted(() => {
   animation: pulse 1s infinite;
 }
 
-.confetti {
+.confetti-container {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
-  z-index: 1000;
+  z-index: 1001;
 }
 
 .confetti-piece {
-  position: absolute;
+  position: fixed;
   width: 10px;
   height: 30px;
-  background: #ffd300;
-  top: 0;
+  background: transparent;
+  top: -20px;
   opacity: 0;
+  animation: confetti-fall 3s linear forwards;
 }
 
-@keyframes confetti-fall {
-  0% {
-    transform: translateY(0) rotate(0deg);
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(100vh) rotate(360deg);
-    opacity: 0;
-  }
+.confetti-piece:nth-child(3n) {
+  background: #ff6b6b;
 }
 
-@keyframes confetti-slow {
-  0% { transform: translate(0, 0) rotateX(0) rotateY(0); }
-  100% { transform: translate(100px, 100vh) rotateX(360deg) rotateY(360deg); }
+.confetti-piece:nth-child(3n+1) {
+  background: #4ecdc4;
 }
 
-@keyframes confetti-medium {
-  0% { transform: translate(0, 0) rotateX(0) rotateY(0); }
-  100% { transform: translate(-100px, 100vh) rotateX(-360deg) rotateY(-360deg); }
-}
-
-@keyframes confetti-fast {
-  0% { transform: translate(0, 0) rotateX(0) rotateY(0); }
-  100% { transform: translate(200px, 100vh) rotateX(360deg) rotateY(360deg); }
-}
-
-.confetti-piece:nth-child(odd) {
-  background: #7450fd;
-}
-
-.confetti-piece:nth-child(even) {
-  z-index: 1;
-}
-
-.confetti-piece:nth-child(4n) {
-  width: 5px;
-  height: 12px;
-  animation-duration: 2000ms;
-  background: #ff0000;
-}
-
-.confetti-piece:nth-child(4n+1) {
-  background: #ffd300;
-  animation-duration: 2500ms;
-  animation-timing-function: cubic-bezier(.84,0,.84,.32);
-}
-
-.confetti-piece:nth-child(4n+2) {
-  background: #00ff00;
-  animation-duration: 3000ms;
-  animation-timing-function: cubic-bezier(.84,0,.84,.32);
-}
-
-.confetti-piece:nth-child(4n+3) {
-  background: #0000ff;
-  animation-duration: 3500ms;
-  animation-timing-function: cubic-bezier(.84,0,.84,.32);
+.confetti-piece:nth-child(3n+2) {
+  background: #ffe66d;
 }
 
 @keyframes fadeIn {
@@ -442,5 +428,46 @@ onUnmounted(() => {
   0% { transform: scale(1); }
   50% { transform: scale(1.1); }
   100% { transform: scale(1); }
+}
+
+.final-score {
+  font-size: 2em;
+  color: #2c3e50;
+  margin: 20px 0;
+  font-weight: bold;
+}
+
+.new-record {
+  font-size: 1.5em;
+  color: #e74c3c;
+  font-weight: bold;
+  animation: pulse 1s infinite;
+  margin: 15px 0;
+}
+
+.previous-record {
+  color: #7f8c8d;
+  font-size: 1.2em;
+  margin: 10px 0;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.game-over-actions button {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.game-over-actions button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 </style> 

@@ -1,4 +1,4 @@
-import type { GameObject } from '@/types/game';
+import type { GameObject, Position, CollisionResult } from '@/types/game';
 import { GAME_CONFIG } from '@/constants/gameConstants';
 
 const BOARD_CENTER_X = GAME_CONFIG.BOARD.WIDTH / 2;
@@ -6,11 +6,11 @@ const MAX_ANGLE = GAME_CONFIG.PHYSICS.MAX_ANGLE;
 
 export const calculateMoment = (object: GameObject): number => {
   // Obliczamy odległość od środka (ramię siły)
-  const distanceFromCenter = Math.abs(object.position.x - BOARD_CENTER_X) / 100; // Konwersja na metry
+  const distanceFromCenter = Math.abs(object.position.x - BOARD_CENTER_X) / GAME_CONFIG.BOARD.WIDTH;
   // Moment siły = masa * przyspieszenie grawitacyjne * ramię siły
   // Znak zależy od strony (ujemny dla lewej, dodatni dla prawej)
   const direction = object.position.x < BOARD_CENTER_X ? -1 : 1;
-  return direction * object.weight * 9.81 * distanceFromCenter;
+  return direction * object.weight * distanceFromCenter * GAME_CONFIG.PHYSICS.MOMENT_MULTIPLIER;
 };
 
 export const calculateTotalMoment = (objects: GameObject[]): number => {
@@ -21,8 +21,8 @@ export const calculateBendingAngle = (leftMoment: number, rightMoment: number): 
   // Całkowity moment to różnica momentów
   const totalMoment = leftMoment + rightMoment; // Lewy moment jest już ujemny
   
-  // Konwertujemy moment na kąt (max moment to około 100 Nm dla max kąta)
-  const maxMoment = 100; // Maksymalny moment dla max kąta
+  // Zwiększamy czułość huśtawki
+  const maxMoment = 20; // Jeszcze bardziej zwiększamy czułość
   const angle = (totalMoment / maxMoment) * MAX_ANGLE;
   
   // Ograniczamy kąt do zakresu -MAX_ANGLE do MAX_ANGLE
@@ -41,17 +41,20 @@ export const updateFallSpeed = (currentSpeed: number, deltaTime: number): number
 export const detectCollision = (
   currentObject: GameObject,
   objects: GameObject[]
-): { hasCollision: boolean; position?: { x: number; y: number } } => {
+): CollisionResult => {
+  // Sprawdzamy kolizję z innymi obiektami
   for (const obj of objects) {
     const horizontalOverlap = Math.abs(currentObject.position.x - obj.position.x) < 
       (currentObject.size.width + obj.size.width) / 2;
     
-    const verticalOverlap = Math.abs(currentObject.position.y - obj.position.y) <
-      (currentObject.size.height + obj.size.height) / 2;
+    const verticalDistance = currentObject.position.y - obj.position.y;
+    const verticalOverlap = verticalDistance > 0 && 
+      verticalDistance < (currentObject.size.height + obj.size.height) / 2;
 
     if (horizontalOverlap && verticalOverlap) {
       return {
         hasCollision: true,
+        collidingWith: obj,
         position: {
           x: currentObject.position.x,
           y: obj.position.y - currentObject.size.height - GAME_CONFIG.PHYSICS.COLLISION_THRESHOLD
@@ -61,4 +64,15 @@ export const detectCollision = (
   }
 
   return { hasCollision: false };
+};
+
+// Dodajemy nową funkcję do sprawdzania kolizji z huśtawką
+export const isObjectOverTeeterTotter = (
+  objectPosition: Position,
+  objectWidth: number
+): boolean => {
+  const teeterTotterCenter = GAME_CONFIG.BOARD.WIDTH / 2;
+  const teeterTotterWidth = GAME_CONFIG.BOARD.WIDTH * 0.6; // 60% szerokości planszy
+  
+  return Math.abs(objectPosition.x - teeterTotterCenter) < teeterTotterWidth / 2;
 }; 

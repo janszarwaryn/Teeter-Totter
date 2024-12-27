@@ -1,5 +1,6 @@
 <template>
   <div class="timer">
+    <div class="time-label">Time:</div>
     {{ formatTime(timeElapsed) }}
   </div>
 </template>
@@ -9,6 +10,7 @@ import { ref, watch, onUnmounted } from 'vue';
 
 const props = defineProps<{
   isRunning: boolean;
+  initialTime?: number;
 }>();
 
 const timeElapsed = ref(0);
@@ -40,6 +42,14 @@ const resetTimer = () => {
   timeElapsed.value = 0;
 };
 
+const start = () => {
+  startTimer();
+};
+
+const pause = () => {
+  stopTimer();
+};
+
 watch(() => props.isRunning, (newValue) => {
   if (newValue) {
     startTimer();
@@ -54,7 +64,12 @@ onUnmounted(() => {
 
 defineExpose({
   resetTimer,
-  getTime: () => timeElapsed.value
+  start,
+  pause,
+  getTime: () => timeElapsed.value,
+  addBonus: (seconds: number) => {
+    timeElapsed.value += seconds;
+  }
 });
 </script>
 
@@ -68,5 +83,13 @@ defineExpose({
   border-radius: 8px;
   min-width: 80px;
   text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.time-label {
+  font-size: 0.8em;
+  color: rgba(255, 255, 255, 0.7);
 }
 </style> 

@@ -14,7 +14,9 @@ export const useGameStore = defineStore('game', {
     bendingAngle: 0,
     isAutoPlay: false,
     highScore: 0,
-    throwsLeft: 3
+    throwsLeft: 3,
+    gameTime: 0,
+    bonusPoints: 0
   }),
 
   getters: {
@@ -34,19 +36,25 @@ export const useGameStore = defineStore('game', {
 
   actions: {
     startGame() {
-      this.status = GameStatus.PLAYING;
-      this.score = 0;
+      // Resetujemy stan gry przed startem
       this.leftObjects = [];
       this.rightObjects = [];
+      this.currentObject = null;
       this.bendingAngle = 0;
       this.throwsLeft = 3;
+      this.score = 0;
+      
+      this.status = GameStatus.PLAYING;
+      // Zawsze tworzymy nowy obiekt przy starcie
       this.spawnNewObject();
     },
 
     pauseGame() {
       if (this.status === GameStatus.PLAYING) {
         this.status = GameStatus.PAUSED;
-      } else if (this.status === GameStatus.PAUSED) {
+        return;
+      } 
+      if (this.status === GameStatus.PAUSED) {
         this.status = GameStatus.PLAYING;
       }
     },
@@ -57,10 +65,11 @@ export const useGameStore = defineStore('game', {
     },
 
     spawnNewObject() {
+      // Zawsze tworzymy nowy obiekt
       const newObject = generateRandomObject(this.score);
       const side = Math.random() < 0.5 ? 'left' : 'right';
       newObject.position.x = getInitialPosition(side);
-      newObject.position.y = 0; // Start from top
+      newObject.position.y = 0;
       this.currentObject = newObject;
     },
 
@@ -84,34 +93,55 @@ export const useGameStore = defineStore('game', {
     placeObject() {
       if (!this.currentObject) return;
 
-      const side = this.currentObject.position.x < 500 ? 'left' : 'right';
-      if (side === 'left') {
+      if (this.currentObject.position.x < GAME_CONFIG.BOARD.WIDTH / 2) {
         this.leftObjects.push({ ...this.currentObject });
       } else {
         this.rightObjects.push({ ...this.currentObject });
       }
-
-      this.updateGameState();
+      
+      this.recalculateBendingAngle();
+      
+      // Bonus za dobre umieszczenie obiektu
+      if (Math.abs(this.bendingAngle) < 15) {
+        this.addBonusPoints(100);
+      }
+      
+      this.currentObject = null;
       this.spawnNewObject();
     },
 
-    updateGameState() {
-      const leftMoment = this.leftMoment;
-      const rightMoment = this.rightMoment;
+    recalculateBendingAngle() {
+      const leftMoment = calculateTotalMoment(this.leftObjects);
+      const rightMoment = calculateTotalMoment(this.rightObjects);
       this.bendingAngle = calculateBendingAngle(leftMoment, rightMoment);
-
+      
+      // Sprawdź czy gra się nie skończyła
       if (isGameOver(this.bendingAngle)) {
         this.endGame();
-      } else {
-        this.updateScore();
       }
     },
 
     updateScore(time: number) {
-      this.score = time;
-      if (time > this.highScore) {
-        this.highScore = time;
+      this.gameTime = time;
+      // Podstawowe punkty za czas
+      const timePoints = time * 10;
+      
+      // Bonus za stabilność
+      const stabilityBonus = Math.abs(this.bendingAngle) < 10 ? 500 : 0;
+      
+      // Bonus za ilość obiektów na huśtawce
+      const objectsBonus = (this.leftObjects.length + this.rightObjects.length) * 50;
+      
+      // Oblicz całkowity wynik
+      this.score = Math.floor(timePoints + this.bonusPoints + objectsBonus + stabilityBonus);
+      
+      if (this.score > this.highScore) {
+        this.highScore = this.score;
       }
+    },
+
+    addBonusPoints(points: number) {
+      this.bonusPoints += points;
     },
 
     toggleAutoPlay() {
@@ -125,28 +155,18 @@ export const useGameStore = defineStore('game', {
       // Zachowujemy najlepszy wynik
       const currentHighScore = this.highScore;
       
-      // Resetujemy wszystkie wartości do stanu początkowego
-      this.$reset();
-      
-      // Przywracamy najlepszy wynik
-      this.highScore = currentHighScore;
-      
-      // Zatrzymujemy grę
+      // Reset stanu gry
       this.status = GameStatus.INITIAL;
-      
-      // Wyczyść wszystkie obiekty
+      this.score = 0;
       this.leftObjects = [];
       this.rightObjects = [];
       this.currentObject = null;
-      
-      // Resetuj kąt nachylenia
       this.bendingAngle = 0;
-      
-      // Resetuj liczbę wyrzutów
       this.throwsLeft = 3;
-      
-      // Wyłącz tryb auto-play
       this.isAutoPlay = false;
+      
+      // Przywracamy najlepszy wynik
+      this.highScore = currentHighScore;
     }
   }
 }); 
