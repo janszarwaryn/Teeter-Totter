@@ -18,6 +18,54 @@ An interactive balancing game where objects fall onto a teeter-totter, built wit
 - Responsive interface
 - Auto-play mode
 - High score system
+- Share score functionality
+- Stabilization countdown system
+- Throws counter with visual feedback
+- Phase progression indicator
+- Real-time balance angle display
+- Visual grid system for precise positioning
+- Adaptive object sizing based on weight
+- Emergency throw system (3 throws limit)
+- Pause/Resume functionality
+- Instant reset option
+- Dynamic difficulty scaling
+- Visual feedback for critical balance states
+
+## 🎯 Game Mechanics
+
+### Balance System
+- Real-time physics calculations
+- Moment-based balance calculations
+- Weight distribution visualization
+- Critical angle warnings
+- Stabilization bonuses
+
+### Scoring Mechanics
+- Time-based points
+- Stability bonuses (up to 1000 points)
+- Object placement bonuses (300/100 points)
+- Phase completion bonuses
+- Balance maintenance rewards
+- Combo system for consecutive stable placements
+
+### Visual Feedback
+- Color-coded weight indicators
+- Balance angle visualization
+- Phase progression bar
+- Throw counter with warning states
+- Stabilization countdown timer
+- Victory/Game Over animations
+- Shape-specific visual effects
+
+### User Interface
+- Minimalist control panel
+- Real-time score display
+- Phase information panel
+- Balance status indicator
+- Throws remaining counter
+- High score tracking
+- Game phase indicator
+- Emergency warnings
 
 ## 🛠️ Technologies
 
@@ -31,27 +79,27 @@ An interactive balancing game where objects fall onto a teeter-totter, built wit
 
 1. Clone the repository:
 
-$
+```
 git clone [REPOSITORY_URL]
-$
+```
 
 2. Navigate to the project directory:
 
-$
+```
 cd teeter-totter-game
-$
+```
 
 3. Install dependencies:
 
-$
+```
 npm install
-$
+```
 
 4. Run the development server:
 
-$
+```
 npm run dev
-$
+```
 
 ## 🎯 How to Play
 
@@ -64,7 +112,7 @@ $
 
 ## 🏗️ Project Architecture
 
-$
+```
 src/
 ├── components/          # Vue components
 │   ├── atoms/          # Basic components (Shape, Button)
@@ -74,7 +122,7 @@ src/
 ├── helpers/            # Helper functions
 ├── constants/          # Constants and configuration
 └── types/              # TypeScript definitions
-$
+```
 
 ### Key Components
 
@@ -123,9 +171,9 @@ $
 
 Run unit tests:
 
-$
+```
 npm run test:unit
-$
+```
 
 ## 🔧 Configuration
 
