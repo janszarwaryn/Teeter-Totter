@@ -11,11 +11,6 @@
       </div>
     </div>
 
-    <div class="phase-info">
-      <span class="phase-label">{{ currentPhase.name }}</span>
-      <span class="phase-weights">Weights: {{ currentPhase.weights.min }}-{{ currentPhase.weights.max }}kg</span>
-    </div>
-
     <Timer
       ref="timerRef"
       :initial-time="60"
@@ -66,6 +61,19 @@
         </span>
       </div>
     </div>
+
+    <div class="phase-box">
+      <div class="phase-header">
+        <span class="phase-name">{{ currentPhase.name }}</span>
+        <span class="weights">Weights: {{ currentPhase.weights.min }}-{{ currentPhase.weights.max }}kg</span>
+      </div>
+      <div class="mini-progress">
+        <div 
+          class="mini-progress-fill"
+          :style="{ width: `${phaseProgress}%` }"
+        ></div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -84,6 +92,8 @@ interface Props {
   isPaused: boolean;
   isAutoPlay: boolean;
   throwsLeft: number;
+  currentPhase: any;
+  phaseProgress: number;
 }
 
 const props = defineProps<Props>();
@@ -153,28 +163,6 @@ defineExpose({
   display: flex;
   gap: 30px;
   align-items: center;
-}
-
-.phase-info {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  padding: 8px 15px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  min-width: 200px;
-}
-
-.phase-label {
-  font-size: 1.1em;
-  font-weight: bold;
-  color: #4ECDC4;
-}
-
-.phase-weights {
-  font-size: 0.9em;
-  color: rgba(255, 255, 255, 0.7);
 }
 
 .game-controls {
@@ -249,5 +237,49 @@ defineExpose({
 .throws-count.low-throws {
   color: #e74c3c;
   animation: pulse 1s infinite;
+}
+
+.phase-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 8px 12px;
+  border-radius: 6px;
+  width: 200px;
+}
+
+.phase-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.phase-name {
+  font-weight: bold;
+  color: #4ecdc4;
+  font-size: 0.9em;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.weights {
+  font-size: 0.8em;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.mini-progress {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.mini-progress-fill {
+  height: 100%;
+  background: #4ecdc4;
+  transition: width 0.3s ease-out;
+  box-shadow: 0 0 8px rgba(78, 205, 196, 0.5);
 }
 </style> 

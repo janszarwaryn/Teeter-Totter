@@ -16,7 +16,10 @@ export const useGameStore = defineStore('game', {
     highScore: 0,
     throwsLeft: 3,
     gameTime: 0,
-    bonusPoints: 0
+    bonusPoints: 0,
+    isStabilized: false,
+    stabilizationTimeLeft: 0,
+    gameOverReason: null
   }),
 
   getters: {
@@ -36,16 +39,19 @@ export const useGameStore = defineStore('game', {
 
   actions: {
     startGame() {
-      // Resetujemy stan gry przed startem
+      this.status = GameStatus.PLAYING;
       this.leftObjects = [];
       this.rightObjects = [];
       this.currentObject = null;
       this.bendingAngle = 0;
       this.throwsLeft = 3;
       this.score = 0;
+      this.gameTime = 0;
+      this.bonusPoints = 0;
+      this.isStabilized = false;
+      this.stabilizationTimeLeft = 0;
       
-      this.status = GameStatus.PLAYING;
-      // Zawsze tworzymy nowy obiekt przy starcie
+      // Natychmiast spawnujemy pierwszy obiekt
       this.spawnNewObject();
     },
 
@@ -65,12 +71,31 @@ export const useGameStore = defineStore('game', {
     },
 
     spawnNewObject() {
-      // Zawsze tworzymy nowy obiekt
-      const newObject = generateRandomObject(this.score);
-      const side = Math.random() < 0.5 ? 'left' : 'right';
-      newObject.position.x = getInitialPosition(side);
-      newObject.position.y = 0;
-      this.currentObject = newObject;
+      console.log('Attempting to spawn new object');
+      if (this.currentObject || !this.isPlaying) {
+        console.log('Cannot spawn: ', {
+          hasCurrentObject: !!this.currentObject,
+          isPlaying: this.isPlaying
+        });
+        return;
+      }
+      
+      try {
+        const newObject = generateRandomObject(this.score);
+        const side = Math.random() < 0.5 ? 'left' : 'right';
+        
+        // Ustaw początkową pozycję
+        const x = getInitialPosition(side);
+        newObject.position = {
+          x: x,
+          y: -newObject.size.height // Zacznij powyżej widocznego obszaru
+        };
+        
+        this.currentObject = { ...newObject };
+        console.log('Successfully spawned:', this.currentObject);
+      } catch (error) {
+        console.error('Error spawning object:', error);
+      }
     },
 
     moveObject(direction: Direction) {
@@ -93,6 +118,7 @@ export const useGameStore = defineStore('game', {
     placeObject() {
       if (!this.currentObject) return;
 
+      this.currentObject.isPlaced = true;
       if (this.currentObject.position.x < GAME_CONFIG.BOARD.WIDTH / 2) {
         this.leftObjects.push({ ...this.currentObject });
       } else {
@@ -102,12 +128,13 @@ export const useGameStore = defineStore('game', {
       this.recalculateBendingAngle();
       
       // Bonus za dobre umieszczenie obiektu
-      if (Math.abs(this.bendingAngle) < 15) {
+      if (Math.abs(this.bendingAngle) < 10) {
+        this.addBonusPoints(300);
+      } else if (Math.abs(this.bendingAngle) < 20) {
         this.addBonusPoints(100);
       }
       
       this.currentObject = null;
-      this.spawnNewObject();
     },
 
     recalculateBendingAngle() {
@@ -123,18 +150,37 @@ export const useGameStore = defineStore('game', {
 
     updateScore(time: number) {
       this.gameTime = time;
+      
       // Podstawowe punkty za czas
-      const timePoints = time * 10;
+      const timePoints = Math.floor(time * 10);
       
       // Bonus za stabilność
-      const stabilityBonus = Math.abs(this.bendingAngle) < 10 ? 500 : 0;
+      const stabilityBonus = Math.abs(this.bendingAngle) < 10 ? 1000 : 
+                            Math.abs(this.bendingAngle) < 20 ? 500 : 0;
       
-      // Bonus za ilość obiektów na huśtawce
-      const objectsBonus = (this.leftObjects.length + this.rightObjects.length) * 50;
+      // Bonus za ilość obiektów i ich balans
+      const totalObjects = this.leftObjects.length + this.rightObjects.length;
+      const objectsBonus = totalObjects * 100;
+      
+      // Obliczamy rzeczywisty balans momentów
+      const leftMoment = this.leftObjects.reduce((sum, obj) => sum + obj.weight, 0);
+      const rightMoment = this.rightObjects.reduce((sum, obj) => sum + obj.weight, 0);
+      const momentDifference = Math.abs(leftMoment - rightMoment);
+      
+      // Bonus za dobry balans wag
+      const balanceBonus = momentDifference < 2 ? 1000 :
+                          momentDifference < 4 ? 500 : 0;
       
       // Oblicz całkowity wynik
-      this.score = Math.floor(timePoints + this.bonusPoints + objectsBonus + stabilityBonus);
+      this.score = Math.floor(
+        timePoints + 
+        this.bonusPoints + 
+        objectsBonus + 
+        stabilityBonus + 
+        balanceBonus
+      );
       
+      // Zapisz najlepszy wynik
       if (this.score > this.highScore) {
         this.highScore = this.score;
       }
@@ -167,6 +213,10 @@ export const useGameStore = defineStore('game', {
       
       // Przywracamy najlepszy wynik
       this.highScore = currentHighScore;
+    },
+
+    setGameOverReason(reason: 'balance' | 'throws' | 'time') {
+      this.gameOverReason = reason;
     }
   }
 }); 

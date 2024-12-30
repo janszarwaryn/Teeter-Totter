@@ -44,6 +44,7 @@ defineProps<{
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 1;
 }
 
 .teeter-totter {
@@ -55,16 +56,11 @@ defineProps<{
 }
 
 .board {
-  position: absolute;
-  bottom: 80px;
-  left: 50%;
-  width: 800px;
+  width: 100%;
   height: 20px;
-  background: linear-gradient(to right, #34495e, #2c3e50);
-  transform: translate(-50%, 0);
+  background: #34495e;
   border-radius: 4px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-  transition: background-color 0.3s ease;
+  position: relative;
 }
 
 .board.stabilized {

@@ -9,7 +9,9 @@
       :is-paused="store.isPaused"
       :is-auto-play="store.isAutoPlay"
       :throws-left="store.throwsLeft"
-      @start="store.startGame"
+      :current-phase="getCurrentPhase(store.score)"
+      :phase-progress="getPhaseProgress(store.score)"
+      @start="handleStart"
       @pause="store.pauseGame"
       @reset="handleReset"
       @toggle-auto-play="store.toggleAutoPlay"
@@ -54,13 +56,46 @@
 
     <div v-if="store.isGameOver" class="game-over">
       <div class="game-over-content">
-        <h2>Game Over!</h2>
-        <p class="final-score">Time Played: {{ formatTime(store.score) }}</p>
-        <p v-if="isWinner" class="new-record">New Record!</p>
+        <h2>{{ getGameOverMessage }}</h2>
+        <div class="stats-container">
+          <div class="stat-item">
+            <span class="stat-label">Time Played:</span>
+            <span class="stat-value">{{ formatTime(store.gameTime) }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Final Score:</span>
+            <span class="stat-value">{{ store.score }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Score Breakdown:</span>
+            <div class="score-breakdown">
+              <div>Time Bonus: {{ timeBonus }}</div>
+              <div>Stability: {{ stabilityBonus }}</div>
+              <div>Objects: {{ objectsBonus }}</div>
+              <div>Phase: {{ phaseBonus }}</div>
+            </div>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Objects Placed:</span>
+            <span class="stat-value">{{ store.leftObjects.length + store.rightObjects.length }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Phase Reached:</span>
+            <span class="stat-value">{{ getCurrentPhase(store.score).name }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Balance Status:</span>
+            <span class="stat-value">{{ Math.abs(store.bendingAngle).toFixed(1) }}°</span>
+          </div>
+        </div>
+        <p v-if="isWinner" class="new-record">New Record! 🏆</p>
         <p class="previous-record" v-if="!isWinner">
-          Best Time: {{ formatTime(store.highScore) }}
+          Best Score: {{ store.highScore }}
         </p>
-        <Button variant="primary" @click="handleReset">Play Again</Button>
+        <div class="game-over-actions">
+          <Button variant="primary" @click="handleReset">Play Again</Button>
+          <Button variant="secondary" @click="shareScore">Share Score</Button>
+        </div>
       </div>
     </div>
 
@@ -76,49 +111,44 @@
         }"
       ></div>
     </div>
+
+    <div v-if="isWinner" class="fireworks-container">
+      <div 
+        v-for="firework in fireworksRef" 
+        :key="firework.id"
+        class="firework"
+        :style="firework.style"
+      ></div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useGameStore } from '@/stores/game';
 import Shape from '@/components/atoms/Shape.vue';
 import Button from '@/components/atoms/Button.vue';
 import TeeterTotter from '@/components/organisms/TeeterTotter.vue';
 import ControlPanel from '@/components/molecules/ControlPanel.vue';
-import { CONTROLS, GAME_CONFIG } from '@/constants/gameConstants';
-import { detectCollision, updateFallSpeed, isObjectOverTeeterTotter } from '@/helpers/physics';
+import { CONTROLS, GAME_CONFIG, GAME_PHASES } from '@/constants/gameConstants';
+import { detectCollision, updateFallSpeed, isObjectOverTeeterTotter, isBalanceCritical, checkTeeterTotterCollision, isGameOver } from '@/helpers/physics';
+import { getCurrentPhase } from '@/helpers/gameLogic';
 
 const store = useGameStore();
 const gameArea = ref<HTMLElement | null>(null);
 const controlPanelRef = ref<InstanceType<typeof ControlPanel> | null>(null);
 const showConfetti = ref(false);
 const isWinner = ref(false);
+const pressedKeys = ref<string[]>([]);
 
+let spawnTimeout: number;
 let animationFrameId: number;
-let lastTime = ref(0);
-let currentFallSpeed = GAME_CONFIG.PHYSICS.INITIAL_FALL_SPEED;
-
-const BOARD_HEIGHT = GAME_CONFIG.BOARD.HEIGHT;
-const BOARD_SURFACE_Y = GAME_CONFIG.BOARD.SURFACE_Y;
-const BOARD_CENTER_X = GAME_CONFIG.BOARD.WIDTH / 2;
-const COLLISION_THRESHOLD = GAME_CONFIG.PHYSICS.COLLISION_THRESHOLD;
-
-const handleReset = () => {
-  showConfetti.value = false;
-  isWinner.value = false;
-  cancelAnimationFrame(animationFrameId);
-  store.reset();
-  lastTime.value = null;
-  currentFallSpeed = GAME_CONFIG.PHYSICS.INITIAL_FALL_SPEED;
-  controlPanelRef.value?.resetTimer?.();
-  gameArea.value?.focus();
-  
-  // Natychmiast restartujemy pętlę gry
-  animationFrameId = requestAnimationFrame(gameLoop);
-};
 
 const handleKeyPress = (event: KeyboardEvent) => {
+  if (!pressedKeys.value.includes(event.key)) {
+    pressedKeys.value.push(event.key);
+  }
+  
   if (event.key === CONTROLS.RESET) {
     handleReset();
     return;
@@ -135,9 +165,6 @@ const handleKeyPress = (event: KeyboardEvent) => {
     case CONTROLS.MOVE_RIGHT:
       store.moveObject('right');
       break;
-    case CONTROLS.SPEED_UP:
-      currentFallSpeed = GAME_CONFIG.PHYSICS.MAX_FALL_SPEED;
-      break;
     case CONTROLS.PAUSE:
       store.pauseGame();
       break;
@@ -145,90 +172,63 @@ const handleKeyPress = (event: KeyboardEvent) => {
 };
 
 const handleKeyUp = (event: KeyboardEvent) => {
-  if (event.key === CONTROLS.SPEED_UP) {
-    currentFallSpeed = GAME_CONFIG.PHYSICS.INITIAL_FALL_SPEED;
-  }
+  pressedKeys.value = pressedKeys.value.filter(key => key !== event.key);
+};
+
+const handleReset = () => {
+  showConfetti.value = false;
+  isWinner.value = false;
+  cancelAnimationFrame(animationFrameId);
+  store.reset();
+  controlPanelRef.value?.resetTimer?.();
+  gameArea.value?.focus();
+  animationFrameId = requestAnimationFrame(gameLoop);
+};
+
+const handleStart = () => {
+  console.log('Game started');
+  store.startGame();
+  gameArea.value?.focus();
+  animationFrameId = requestAnimationFrame(gameLoop);
 };
 
 const gameLoop = (timestamp: number) => {
-  if (!lastTime.value) {
-    lastTime.value = timestamp;
-  }
-  
-  const deltaTime = timestamp - lastTime.value;
-  lastTime.value = timestamp;
+  animationFrameId = requestAnimationFrame(gameLoop);
 
-  // Upewniamy się, że gra jest w odpowiednim stanie
-  if (!store.isPlaying || store.isPaused || store.isGameOver) {
-    animationFrameId = requestAnimationFrame(gameLoop);
+  if (store.isPaused || store.isGameOver || !store.isPlaying) {
     return;
   }
 
-  // Sprawdzamy czy mamy aktywny obiekt
   if (!store.currentObject) {
     store.spawnNewObject();
+    return;
   }
 
-  if (store.currentObject) {
-    const objectHeight = store.currentObject.size.height;
-    const movement = (currentFallSpeed * deltaTime) / 1000;
-    const newY = store.currentObject.position.y + movement;
-    const objectBottom = newY + objectHeight / 2;
-    
-    // Sprawdź czy obiekt jest nad huśtawką
-    const isOverTeeterTotter = isObjectOverTeeterTotter(
-      store.currentObject.position,
-      store.currentObject.size.width
-    );
+  // Aktualizuj pozycję spadającego obiektu
+  const speed = pressedKeys.value.includes(CONTROLS.SPEED_UP) ? 
+    GAME_CONFIG.PHYSICS.SPEED_UP_MULTIPLIER : 
+    GAME_CONFIG.PHYSICS.INITIAL_FALL_SPEED;
 
-    // Sprawdź kolizje z innymi obiektami
-    const leftCollision = detectCollision(store.currentObject, store.leftObjects);
-    const rightCollision = detectCollision(store.currentObject, store.rightObjects);
-    const collision = leftCollision.hasCollision ? leftCollision : rightCollision;
+  // Aktualizuj pozycję Y
+  const newY = store.currentObject.position.y + speed;
+  store.currentObject.position.y = newY;
 
-    if (collision.hasCollision && collision.position) {
-      // Kolizja z innym obiektem
-      store.currentObject.position.y = collision.position.y;
+  // Sprawdź kolizje
+  const objectHeight = store.currentObject.size.height;
+  const objectBottom = newY + (objectHeight / 2);
+
+  if (objectBottom >= GAME_CONFIG.BOARD.SURFACE_Y) {
+    if (isObjectOverTeeterTotter(store.currentObject.position, store.currentObject.size.width)) {
+      store.currentObject.position.y = GAME_CONFIG.BOARD.SURFACE_Y - (objectHeight / 2);
       store.placeObject();
-      store.recalculateBendingAngle();
-      if (Math.abs(store.bendingAngle) < 10) {
-        controlPanelRef.value?.addTimeBonus(5);
-      }
-      currentFallSpeed = GAME_CONFIG.PHYSICS.INITIAL_FALL_SPEED;
-    } else if (
-      isOverTeeterTotter && 
-      objectBottom >= GAME_CONFIG.BOARD.SURFACE_Y - GAME_CONFIG.PHYSICS.COLLISION_THRESHOLD
-    ) {
-      // Kolizja z huśtawką
-      store.currentObject.position.y = 
-        GAME_CONFIG.BOARD.SURFACE_Y - 
-        (objectHeight / 2) - 
-        GAME_CONFIG.PHYSICS.COLLISION_THRESHOLD;
-      store.placeObject();
-      store.recalculateBendingAngle();
-      currentFallSpeed = GAME_CONFIG.PHYSICS.INITIAL_FALL_SPEED;
-    } else if (!isOverTeeterTotter && objectBottom >= GAME_CONFIG.BOARD.HEIGHT) {
-      // Obiekt minął huśtawkę
-      if (store.throwsLeft > 0) {
-        store.throwsLeft--;
-      }
-      if (store.throwsLeft <= 0) {
-        handleGameOver();
-        cancelAnimationFrame(animationFrameId);
-        return;
-      }
-      store.spawnNewObject();
-      currentFallSpeed = GAME_CONFIG.PHYSICS.INITIAL_FALL_SPEED;
     } else {
-      // Kontynuuj spadanie
-      store.currentObject.position.y = newY;
-      if (!store.isAutoPlay) {
-        currentFallSpeed = updateFallSpeed(currentFallSpeed, deltaTime);
+      store.throwsLeft--;
+      store.currentObject = null;
+      if (store.throwsLeft <= 0) {
+        handleGameOver('throws');
       }
     }
   }
-  
-  animationFrameId = requestAnimationFrame(gameLoop);
 };
 
 const handleTimeUp = () => {
@@ -237,16 +237,53 @@ const handleTimeUp = () => {
   }
 };
 
-const handleGameOver = () => {
+const handleGameOver = (reason: 'balance' | 'throws' | 'time') => {
   if (store.isGameOver) return;
+  cancelAnimationFrame(animationFrameId);
   const finalTime = controlPanelRef.value?.getTime() || 0;
+  
+  // Oblicz końcowy wynik
+  const timeBonus = finalTime * 10;
+  const stabilityBonus = Math.abs(store.bendingAngle) < 10 ? 1000 : 0;
+  const objectsBonus = (store.leftObjects.length + store.rightObjects.length) * 100;
+  const phaseBonus = Object.values(GAME_PHASES).findIndex(
+    phase => phase.name === getCurrentPhase(store.score).name
+  ) * 1000;
+  
+  store.addBonusPoints(timeBonus + stabilityBonus + objectsBonus + phaseBonus);
   store.updateScore(finalTime);
-  if (finalTime > store.highScore) {
-    store.highScore = finalTime;
+  
+  if (store.score > store.highScore) {
+    store.highScore = store.score;
     showConfetti.value = true;
     isWinner.value = true;
+    createFireworks();
   }
+  
   store.endGame();
+  store.setGameOverReason(reason);
+  setTimeout(() => {
+    showGameOver.value = true;
+  }, 500);
+};
+
+const createFireworks = () => {
+  const fireworks = [];
+  for (let i = 0; i < 20; i++) {
+    const delay = Math.random() * 2;
+    const x = Math.random() * window.innerWidth;
+    const y = Math.random() * (window.innerHeight / 2);
+    fireworks.push({
+      id: i,
+      style: {
+        left: `${x}px`,
+        top: `${y}px`,
+        animationDelay: `${delay}s`,
+        '--color': `hsl(${Math.random() * 360}, 80%, 60%)`
+      }
+    });
+  }
+  fireworksRef.value = fireworks;
 };
 
 const generateConfetti = () => {
@@ -266,6 +303,82 @@ const formatTime = (seconds: number): string => {
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 };
 
+const getNextPhaseThreshold = (score: number) => {
+  const currentPhase = getCurrentPhase(score);
+  const phases = Object.values(GAME_PHASES);
+  const currentIndex = phases.findIndex(phase => phase.name === currentPhase.name);
+  if (currentIndex < phases.length - 1) {
+    return phases[currentIndex + 1].scoreRange[0];
+  }
+  return '���';
+};
+
+const getPhaseProgress = (score: number) => {
+  const currentPhase = getCurrentPhase(score);
+  const [min, max] = currentPhase.scoreRange;
+  if (max === Infinity) {
+    // Dla ostatniej fazy pokazujemy postęp do "nieskończoności" jako wielokrotność minimum
+    return Math.min((score - min) / (min * 2) * 100, 100);
+  }
+  const progress = ((score - min) / (max - min)) * 100;
+  return Math.min(Math.max(progress, 0), 100);
+};
+
+const difficultyMultiplier = computed(() => {
+  const phase = getCurrentPhase(store.score);
+  const phaseIndex = Object.values(GAME_PHASES).findIndex(p => p.name === phase.name);
+  return 1 + (phaseIndex * 0.2);
+});
+
+const getGameOverMessage = computed(() => {
+  switch (store.gameOverReason) {
+    case 'balance':
+      return 'Game Over - Lost Balance!';
+    case 'throws':
+      return 'Game Over - Out of Throws!';
+    case 'time':
+      return 'Time\'s Up!';
+    default:
+      return 'Game Over!';
+  }
+});
+
+// Przechowujemy bonusy jako refs żeby pokazać je w podsumowaniu
+const timeBonus = ref(0);
+const stabilityBonus = ref(0);
+const objectsBonus = ref(0);
+const phaseBonus = ref(0);
+
+const calculateBonuses = (finalTime: number) => {
+  timeBonus.value = finalTime * 10;
+  stabilityBonus.value = Math.abs(store.bendingAngle) < 10 ? 1000 : 0;
+  objectsBonus.value = (store.leftObjects.length + store.rightObjects.length) * 100;
+  phaseBonus.value = Object.values(GAME_PHASES).findIndex(
+    phase => phase.name === getCurrentPhase(store.score).name
+  ) * 1000;
+  
+  return timeBonus.value + stabilityBonus.value + objectsBonus.value + phaseBonus.value;
+};
+
+const shareScore = () => {
+  const text = `I scored ${store.score} points in Teeter Totter Game! 
+    Time: ${formatTime(store.gameTime)}
+    Phase: ${getCurrentPhase(store.score).name}
+    Objects: ${store.leftObjects.length + store.rightObjects.length}
+    Can you beat my score? 🎮`;
+    
+  if (navigator.share) {
+    navigator.share({
+      title: 'My Teeter Totter Score',
+      text: text,
+      url: window.location.href
+    });
+  } else {
+    navigator.clipboard.writeText(text);
+    // Pokaż powiadomienie o skopiowaniu
+  }
+};
+
 onMounted(() => {
   gameArea.value?.focus();
   window.addEventListener('keydown', handleKeyPress);
@@ -274,6 +387,9 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  if (spawnTimeout) {
+    clearTimeout(spawnTimeout);
+  }
   window.removeEventListener('keydown', handleKeyPress);
   window.removeEventListener('keyup', handleKeyUp);
   cancelAnimationFrame(animationFrameId);
@@ -359,9 +475,10 @@ onUnmounted(() => {
 }
 
 .game-over-content h2 {
-  color: #2c3e50;
-  margin: 0 0 20px;
-  font-size: 2em;
+  color: #e74c3c;
+  font-size: 2.5em;
+  margin-bottom: 30px;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
 }
 
 .game-over-content p {
@@ -469,5 +586,91 @@ onUnmounted(() => {
 .game-over-actions button:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.stats-container {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+  margin: 20px 0;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 12px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 15px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.stat-label {
+  font-size: 0.9em;
+  color: #7f8c8d;
+  margin-bottom: 5px;
+}
+
+.stat-value {
+  font-size: 1.4em;
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+@keyframes firework {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+    box-shadow: 0 0 0 0 var(--color);
+  }
+  50% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+    box-shadow: 0 0 40px 40px var(--color);
+  }
+}
+
+.fireworks-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.firework {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: var(--color);
+  border-radius: 50%;
+  animation: firework 1s ease-out forwards;
+}
+
+.score-breakdown {
+  font-size: 0.9em;
+  text-align: left;
+  margin-top: 5px;
+}
+
+.score-breakdown div {
+  margin: 2px 0;
+  color: #666;
+}
+
+.game-over-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  justify-content: center;
 }
 </style> 

@@ -5,12 +5,15 @@ const BOARD_CENTER_X = GAME_CONFIG.BOARD.WIDTH / 2;
 const MAX_ANGLE = GAME_CONFIG.PHYSICS.MAX_ANGLE;
 
 export const calculateMoment = (object: GameObject): number => {
-  // Obliczamy odległość od środka (ramię siły)
-  const distanceFromCenter = Math.abs(object.position.x - BOARD_CENTER_X) / GAME_CONFIG.BOARD.WIDTH;
-  // Moment siły = masa * przyspieszenie grawitacyjne * ramię siły
-  // Znak zależy od strony (ujemny dla lewej, dodatni dla prawej)
-  const direction = object.position.x < BOARD_CENTER_X ? -1 : 1;
-  return direction * object.weight * distanceFromCenter * GAME_CONFIG.PHYSICS.MOMENT_MULTIPLIER;
+  // Obliczamy odległość od środka w pikselach
+  const distanceFromCenter = Math.abs(object.position.x - BOARD_CENTER_X);
+  
+  // Określamy stronę (lewa = -1, prawa = 1)
+  const side = object.position.x < BOARD_CENTER_X ? -1 : 1;
+  
+  // Moment siły = waga * odległość * strona
+  // Dla lewej strony będzie ujemny, dla prawej dodatni
+  return (object.weight * distanceFromCenter * side) / 100;
 };
 
 export const calculateTotalMoment = (objects: GameObject[]): number => {
@@ -18,19 +21,28 @@ export const calculateTotalMoment = (objects: GameObject[]): number => {
 };
 
 export const calculateBendingAngle = (leftMoment: number, rightMoment: number): number => {
-  // Całkowity moment to różnica momentów
-  const totalMoment = leftMoment + rightMoment; // Lewy moment jest już ujemny
+  // Sumujemy momenty (lewy jest już ujemny)
+  const totalMoment = leftMoment + rightMoment;
   
-  // Zwiększamy czułość huśtawki
-  const maxMoment = 20; // Jeszcze bardziej zwiększamy czułość
-  const angle = (totalMoment / maxMoment) * MAX_ANGLE;
+  // Konwertujemy moment na kąt
+  // Dodatni moment = przechylenie w prawo
+  // Ujemny moment = przechylenie w lewo
+  const angle = totalMoment;
   
-  // Ograniczamy kąt do zakresu -MAX_ANGLE do MAX_ANGLE
-  return Math.max(-MAX_ANGLE, Math.min(angle, MAX_ANGLE));
+  // Ograniczamy maksymalny kąt
+  return Math.max(
+    -GAME_CONFIG.PHYSICS.MAX_ANGLE,
+    Math.min(GAME_CONFIG.PHYSICS.MAX_ANGLE, angle)
+  );
 };
 
-export const isGameOver = (bendingAngle: number): boolean => {
-  return Math.abs(bendingAngle) >= MAX_ANGLE;
+export const isGameOver = (angle: number): boolean => {
+  // Game over gdy kąt przekroczy 90% maksymalnego
+  return Math.abs(angle) >= GAME_CONFIG.PHYSICS.MAX_ANGLE;
+};
+
+export const isBalanceCritical = (angle: number): boolean => {
+  return Math.abs(angle) >= GAME_CONFIG.PHYSICS.MAX_ANGLE * 0.85;
 };
 
 export const updateFallSpeed = (currentSpeed: number, deltaTime: number): number => {
@@ -44,9 +56,11 @@ export const detectCollision = (
 ): CollisionResult => {
   // Sprawdzamy kolizję z innymi obiektami
   for (const obj of objects) {
+    // Sprawdzamy kolizję poziomą
     const horizontalOverlap = Math.abs(currentObject.position.x - obj.position.x) < 
       (currentObject.size.width + obj.size.width) / 2;
-    
+      
+    // Sprawdzamy kolizję pionową
     const verticalDistance = currentObject.position.y - obj.position.y;
     const verticalOverlap = verticalDistance > 0 && 
       verticalDistance < (currentObject.size.height + obj.size.height) / 2;
@@ -57,7 +71,7 @@ export const detectCollision = (
         collidingWith: obj,
         position: {
           x: currentObject.position.x,
-          y: obj.position.y - currentObject.size.height - GAME_CONFIG.PHYSICS.COLLISION_THRESHOLD
+          y: obj.position.y - (currentObject.size.height / 2)
         }
       };
     }

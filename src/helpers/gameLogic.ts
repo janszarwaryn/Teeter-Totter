@@ -1,105 +1,65 @@
-import { ShapeType, GAME_PHASES } from '@/constants/gameConstants';
-import type { GameObject, Position, Size } from '@/types/game';
+import { ShapeType, GAME_CONFIG, GAME_PHASES } from '@/constants/gameConstants';
+import type { GameObject } from '@/types/game';
 
-export const getCurrentPhase = (score: number) => {
-  for (const phase of Object.values(GAME_PHASES)) {
-    const [min, max] = phase.scoreRange;
-    if (score >= min && (score <= max || max === Infinity)) {
-      return phase;
-    }
-  }
-  return GAME_PHASES.PHASE_4; // Domyślnie ostatnia faza
-};
-
-export const generateRandomObject = (score: number = 0): GameObject => {
-  const currentPhase = getCurrentPhase(score);
+export const generateRandomObject = (currentScore: number): GameObject => {
+  const currentPhase = getCurrentPhase(currentScore);
   
-  // Używamy wag z aktualnej fazy
-  const minWeight = currentPhase.weights.min;
-  const maxWeight = currentPhase.weights.max;
-
-  // Losujemy wagę z wybranego zakresu
-  const weight = Math.floor(Math.random() * (maxWeight - minWeight + 1)) + minWeight;
-
-  const shapeTypes = Object.values(ShapeType);
-  const randomType = shapeTypes[Math.floor(Math.random() * shapeTypes.length)];
-
-  const size = calculateSize(weight, randomType);
-  const color = getShapeColor(randomType);
+  // Zwiększamy rozmiary obiektów
+  const baseSize = 40; // Bazowy rozmiar
+  const weight = Math.floor(
+    Math.random() * (currentPhase.weights.max - currentPhase.weights.min + 1)
+  ) + currentPhase.weights.min;
+  
+  const type = Object.values(ShapeType)[
+    Math.floor(Math.random() * Object.values(ShapeType).length)
+  ];
+  
+  // Oblicz rozmiar na podstawie wagi
+  const sizeMultiplier = weight / currentPhase.weights.min;
+  let width = baseSize * sizeMultiplier;
+  let height = baseSize * sizeMultiplier;
+  
+  // Dostosuj wymiary w zależności od typu
+  switch (type) {
+    case ShapeType.TRIANGLE:
+      width *= 1.2;
+      break;
+    case ShapeType.RECTANGLE:
+      height *= 0.8;
+      break;
+  }
+  
+  const colors = {
+    [ShapeType.TRIANGLE]: '#FF6B6B',
+    [ShapeType.CIRCLE]: '#4ECDC4',
+    [ShapeType.RECTANGLE]: '#45B7D1'
+  };
 
   return {
     id: Math.random().toString(36).substr(2, 9),
-    type: randomType,
+    type,
     weight,
     position: { x: 0, y: 0 },
-    size,
-    color
+    size: { width, height },
+    color: colors[type],
+    fallSpeed: GAME_CONFIG.PHYSICS.INITIAL_FALL_SPEED,
+    isPlaced: false
   };
 };
 
-export const calculateSize = (weight: number, type: ShapeType): Size => {
-  // Bazowy rozmiar: 12 pikseli na kilogram
-  const baseSize = weight * 12;
-
-  switch (type) {
-    case ShapeType.CIRCLE:
-      return {
-        width: baseSize,
-        height: baseSize
-      };
-    case ShapeType.TRIANGLE:
-      return {
-        width: baseSize * 1.2,
-        height: baseSize
-      };
-    case ShapeType.RECTANGLE:
-      return {
-        width: baseSize,
-        height: baseSize * 0.8
-      };
-  }
-};
-
-export const getShapeColor = (type: ShapeType): string => {
-  switch (type) {
-    case ShapeType.TRIANGLE:
-      return '#FF6B6B';
-    case ShapeType.CIRCLE:
-      return '#4ECDC4';
-    case ShapeType.RECTANGLE:
-      return '#45B7D1';
-  }
-};
-
 export const getInitialPosition = (side: 'left' | 'right'): number => {
-  const minX = 100; // Minimalna odległość od krawędzi
-  const maxX = 400; // Maksymalna odległość od środka
-  const randomOffset = Math.random() * (maxX - minX) + minX;
-  return side === 'left' ? randomOffset : 1000 - randomOffset;
+  const margin = 100; // Margines od krawędzi
+  const randomOffset = Math.random() * 200; // Losowy offset
+  
+  if (side === 'left') {
+    return margin + randomOffset;
+  } else {
+    return GAME_CONFIG.BOARD.WIDTH - margin - randomOffset;
+  }
 };
 
-export function snapToGrid(position: number): number {
-  const gridSize = GAME_CONFIG.BOARD.GRID_INCREMENT;
-  return Math.round(position / gridSize) * gridSize;
-}
-
-export function calculateScore(bendingAngle: number): number {
-  const maxAngle = GAME_CONFIG.BOARD.MAX_BENDING_ANGLE;
-  const angleRatio = 1 - (bendingAngle / maxAngle);
-  return Math.round(angleRatio * 100);
-}
-
-export function isValidPosition(x: number): boolean {
-  return x >= 0 && x <= GAME_CONFIG.BOARD.WIDTH;
-}
-
-export function getNextPosition(currentX: number, direction: 'left' | 'right'): number {
-  const movement = GAME_CONFIG.BOARD.GRID_INCREMENT;
-  const newX = direction === 'left' 
-    ? currentX - movement 
-    : currentX + movement;
-  
-  return snapToGrid(
-    Math.max(0, Math.min(newX, GAME_CONFIG.BOARD.WIDTH))
-  );
-} 
+export const getCurrentPhase = (score: number) => {
+  return Object.values(GAME_PHASES).find(
+    phase => score >= phase.scoreRange[0] && score <= phase.scoreRange[1]
+  ) || GAME_PHASES.PHASE_1;
+}; 

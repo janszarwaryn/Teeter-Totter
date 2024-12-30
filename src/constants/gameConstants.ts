@@ -2,16 +2,17 @@ export const GAME_CONFIG = {
   BOARD: {
     WIDTH: 1000,
     HEIGHT: 600,
-    SURFACE_Y: 450, // Pozycja Y powierzchni huśtawki
+    SURFACE_Y: 450,
     GRID_INCREMENT: 50
   },
   PHYSICS: {
-    INITIAL_FALL_SPEED: 100,
-    ACCELERATION: 50,
-    MAX_FALL_SPEED: 400,
-    COLLISION_THRESHOLD: 5, // Próg kolizji w pikselach
-    MAX_ANGLE: 30, // Maksymalny kąt przechylenia
-    MOMENT_MULTIPLIER: 50 // Zmniejszamy mnożnik momentu dla lepszej kontroli
+    COLLISION_THRESHOLD: 1,
+    MAX_ANGLE: 25,
+    INITIAL_FALL_SPEED: 3,
+    SPEED_UP_MULTIPLIER: 3,
+    SPAWN_INTERVAL: 0,
+    FALL_ACCELERATION: 0.5,
+    MAX_FALL_SPEED: 10
   }
 } as const;
 

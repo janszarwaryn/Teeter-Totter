@@ -7,6 +7,8 @@ export interface GameObject {
   position: Position;
   size: Size;
   color: string;
+  fallSpeed: number;
+  isPlaced: boolean;
 }
 
 export interface Position {
@@ -33,6 +35,7 @@ export interface GameState {
   stabilizationTimeLeft: number;
   gameTime: number;
   bonusPoints: number;
+  gameOverReason: null | string;
 }
 
 export interface PhysicsState {
