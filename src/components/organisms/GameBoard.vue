@@ -218,10 +218,8 @@ export default defineComponent({
       const deltaTime = timestamp - lastTimestamp.value;
       lastTimestamp.value = timestamp;
 
-      // Aktualizuj pozycję spadającego obiektu
       store.updateObjectPosition(deltaTime);
 
-      // Kontynuuj pętlę gry
       animationFrameId = requestAnimationFrame(gameLoop);
     };
 

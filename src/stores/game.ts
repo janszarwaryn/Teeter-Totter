@@ -51,7 +51,6 @@ export const useGameStore = defineStore('game', {
       this.isStabilized = false;
       this.stabilizationTimeLeft = 0;
       
-      // Natychmiast spawnujemy pierwszy obiekt
       this.spawnNewObject();
     },
 
@@ -80,10 +79,9 @@ export const useGameStore = defineStore('game', {
       try {
         const newObject = generateRandomObject(this.score);
         
-        // Ustaw początkową pozycję dokładnie nad środkiem huśtawki
         const spawnPosition = {
-          x: GAME_CONFIG.BOARD.WIDTH / 2, // Środek planszy
-          y: 0 // Góra planszy
+          x: GAME_CONFIG.BOARD.WIDTH / 2, 
+          y: 0 
         };
 
         this.currentObject = {
@@ -99,14 +97,12 @@ export const useGameStore = defineStore('game', {
     moveObject(direction: Direction) {
       if (!this.currentObject || !this.isPlaying) return;
       
-      // Zwiększamy prędkość ruchu dla lepszej kontroli
       const movement = direction === 'left' ? -GAME_CONFIG.PHYSICS.MOVEMENT_SPEED : GAME_CONFIG.PHYSICS.MOVEMENT_SPEED;
       const newX = this.currentObject.position.x + movement;
       
-      // Pozwalamy na ruch w całym zakresie planszy
-      const margin = 50; // Zwiększony margines dla łatwiejszego przesuwania poza huśtawkę
-      const minX = -margin; // Pozwalamy wyjść poza lewą krawędź
-      const maxX = GAME_CONFIG.BOARD.WIDTH + margin; // Pozwalamy wyjść poza prawą krawędź
+      const margin = 50;
+      const minX = -margin;
+      const maxX = GAME_CONFIG.BOARD.WIDTH + margin;
       
       this.currentObject.position.x = Math.max(minX, Math.min(newX, maxX));
     },
@@ -119,24 +115,14 @@ export const useGameStore = defineStore('game', {
         this.currentObject.size.width
       );
 
-      // Sprawdź czy obiekt jest wystarczająco nisko (blisko powierzchni huśtawki)
-      const isNearSurface = this.currentObject.position.y >= GAME_CONFIG.BOARD.SURFACE_Y - 50;
-
-      // Jeśli obiekt jest poza huśtawką i jest blisko powierzchni
-      if (!isOverTeeterTotter && isNearSurface) {
-        // Zmniejsz liczbę dostępnych throws
+      if (!isOverTeeterTotter && this.currentObject.position.y > GAME_CONFIG.BOARD.HEIGHT * 0.3) {
         this.throwsLeft--;
-        console.log('Throws left:', this.throwsLeft); // Debug
-
-        // Wyczyść aktualny obiekt
         this.currentObject = null;
-
-        // Sprawdź warunek końca gry
+        
         if (this.throwsLeft <= 0) {
           this.setGameOverReason('throws');
           this.endGame();
         } else {
-          // Spawnuj nowy obiekt tylko jeśli gra się nie skończyła
           setTimeout(() => {
             if (this.isPlaying) {
               this.spawnNewObject();
@@ -146,10 +132,8 @@ export const useGameStore = defineStore('game', {
         return;
       }
 
-      // Jeśli obiekt jest nad huśtawką i blisko powierzchni, umieść go
-      if (isOverTeeterTotter && isNearSurface) {
+      if (isOverTeeterTotter) {
         this.currentObject.isPlaced = true;
-        this.currentObject.position.y = GAME_CONFIG.BOARD.SURFACE_Y - (this.currentObject.size.height / 2);
 
         if (this.currentObject.position.x < GAME_CONFIG.BOARD.WIDTH / 2) {
           this.leftObjects.push({ ...this.currentObject });
@@ -157,13 +141,9 @@ export const useGameStore = defineStore('game', {
           this.rightObjects.push({ ...this.currentObject });
         }
 
-        // Przelicz kąt huśtawki
         this.recalculateBendingAngle();
-
-        // Nalicz punkty
         this.addBonusPoints(50);
 
-        // Bonus za precyzję
         const distanceFromCenter = Math.abs(
           this.currentObject.position.x - GAME_CONFIG.BOARD.WIDTH / 2
         );
@@ -171,7 +151,6 @@ export const useGameStore = defineStore('game', {
           this.addBonusPoints(100);
         }
 
-        // Bonus za balans
         const currentAngle = Math.abs(this.bendingAngle);
         if (currentAngle < 5) {
           this.addBonusPoints(200);
@@ -181,7 +160,6 @@ export const useGameStore = defineStore('game', {
           this.addBonusPoints(50);
         }
 
-        // Wyczyść aktualny obiekt i spawnuj nowy
         this.currentObject = null;
         setTimeout(() => {
           if (this.isPlaying) {
@@ -194,19 +172,15 @@ export const useGameStore = defineStore('game', {
     updateObjectPosition(deltaTime: number) {
       if (!this.currentObject || !this.isPlaying) return;
 
-      // Konwertuj deltaTime na sekundy i zastosuj skalowanie
       const deltaSeconds = deltaTime / 1000;
       
-      // Aktualizuj prędkość spadania z mniejszym przyspieszeniem
       this.currentObject.fallSpeed = Math.min(
         this.currentObject.fallSpeed + (GAME_CONFIG.PHYSICS.FALL_ACCELERATION * deltaSeconds),
         GAME_CONFIG.PHYSICS.MAX_FALL_SPEED
       );
 
-      // Aktualizuj pozycję Y z płynniejszym ruchem
       this.currentObject.position.y += this.currentObject.fallSpeed * deltaSeconds * 60;
 
-      // Sprawdź czy obiekt osiągnął powierzchnię
       const isNearSurface = this.currentObject.position.y >= GAME_CONFIG.BOARD.SURFACE_Y - 50;
       
       if (isNearSurface) {
@@ -216,11 +190,9 @@ export const useGameStore = defineStore('game', {
         );
         
         if (!isOverTeeterTotter) {
-          // Jeśli obiekt jest poza huśtawką, daj więcej czasu na reakcję
           this.currentObject.fallSpeed = Math.min(this.currentObject.fallSpeed, 2);
         }
         
-        // Wywołaj placeObject tylko gdy obiekt jest bardzo blisko powierzchni
         if (this.currentObject.position.y >= GAME_CONFIG.BOARD.SURFACE_Y - (this.currentObject.size.height / 2)) {
           this.placeObject();
         }
@@ -232,7 +204,6 @@ export const useGameStore = defineStore('game', {
       const rightMoment = calculateTotalMoment(this.rightObjects);
       this.bendingAngle = calculateBendingAngle(leftMoment, rightMoment);
       
-      // Sprawdź czy gra się nie skończyła
       if (isGameOver(this.bendingAngle)) {
         this.endGame();
       }
@@ -241,18 +212,14 @@ export const useGameStore = defineStore('game', {
     updateScore(time: number) {
       this.gameTime = time;
       
-      // 1. Punkty bazowe za czas
-      const timePoints = Math.floor(time * 5); // 5 punktów za sekundę
+      const timePoints = Math.floor(time * 5); 
       
-      // 2. Bonus za stabilność całkowitą
       const stabilityBonus = Math.abs(this.bendingAngle) < 10 ? 1000 : 
                             Math.abs(this.bendingAngle) < 20 ? 500 : 0;
       
-      // 3. Bonus za ilość obiektów
       const objectCount = this.leftObjects.length + this.rightObjects.length;
       const objectsBonus = objectCount * 100;
       
-      // 4. Bonus za balans wag
       const leftWeight = this.leftObjects.reduce((sum, obj) => sum + obj.weight, 0);
       const rightWeight = this.rightObjects.reduce((sum, obj) => sum + obj.weight, 0);
       const weightDifference = Math.abs(leftWeight - rightWeight);
@@ -261,23 +228,20 @@ export const useGameStore = defineStore('game', {
                           weightDifference < 4 ? 1000 :
                           weightDifference < 6 ? 500 : 0;
       
-      // 5. Bonus za fazę gry
       const phaseIndex = Object.values(GAME_PHASES).findIndex(
         phase => phase.name === getCurrentPhase(this.score).name
       );
       const phaseBonus = phaseIndex * 1000;
 
-      // Oblicz całkowity wynik
       this.score = Math.floor(
-        timePoints +           // Punkty za czas
-        this.bonusPoints +     // Zebrane bonusy
-        objectsBonus +         // Bonus za ilość obiektów
-        stabilityBonus +       // Bonus za stabilność
-        balanceBonus +        // Bonus za balans wag
-        phaseBonus            // Bonus za osiągniętą fazę
+        timePoints +           
+        this.bonusPoints +     
+        objectsBonus +         
+        stabilityBonus +       
+        balanceBonus +        
+        phaseBonus            
       );
       
-      // Zapisz najlepszy wynik
       if (this.score > this.highScore) {
         this.highScore = this.score;
       }
@@ -285,7 +249,7 @@ export const useGameStore = defineStore('game', {
 
     addBonusPoints(points: number) {
       this.bonusPoints += points;
-      this.score += points; // Natychmiast aktualizuj wynik
+      this.score += points; 
     },
 
     toggleAutoPlay() {
@@ -296,10 +260,8 @@ export const useGameStore = defineStore('game', {
     },
 
     reset() {
-      // Zachowujemy najlepszy wynik
       const currentHighScore = this.highScore;
       
-      // Reset stanu gry
       this.status = GameStatus.INITIAL;
       this.score = 0;
       this.leftObjects = [];
@@ -309,7 +271,6 @@ export const useGameStore = defineStore('game', {
       this.throwsLeft = 3;
       this.isAutoPlay = false;
       
-      // Przywracamy najlepszy wynik
       this.highScore = currentHighScore;
     },
 

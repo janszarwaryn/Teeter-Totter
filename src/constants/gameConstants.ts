@@ -8,27 +8,27 @@ export const GAME_CONFIG = {
       CENTER_X: 600,
       Y: 600,
       VALID_AREA: {
-        MIN_X: 240, // 20% szerokości planszy
-        MAX_X: 960  // 80% szerokości planszy
+        MIN_X: 240,
+        MAX_X: 960
       }
     }
   },
   PHYSICS: {
     COLLISION_THRESHOLD: 1,
     MAX_ANGLE: 25,
-    INITIAL_FALL_SPEED: 1, // Zmniejszona z 3 na 1
+    INITIAL_FALL_SPEED: 1,
     SPEED_UP_MULTIPLIER: 3,
     SPAWN_INTERVAL: 0,
-    FALL_ACCELERATION: 0.2, // Zmniejszona z 0.5 na 0.2
-    MAX_FALL_SPEED: 5, // Zmniejszona z 10 na 5
+    FALL_ACCELERATION: 0.2,
+    MAX_FALL_SPEED: 5,
     TEETER_TOTTER_WIDTH: 0.6,
-    MOVEMENT_SPEED: 30 // Zwiększona z 20 na 30 dla lepszej kontroli
+    MOVEMENT_SPEED: 30
   },
   GAME_RULES: {
-    MAX_GAME_TIME: 180, // 3 minuty w sekundach
+    MAX_GAME_TIME: 180,
     INITIAL_THROWS: 3,
-    MAX_ANGLE: 25, // maksymalny kąt przechylenia
-    CRITICAL_ANGLE_THRESHOLD: 0.85 // 85% maksymalnego kąta
+    MAX_ANGLE: 25,
+    CRITICAL_ANGLE_THRESHOLD: 0.85
   }
 } as const;
 
@@ -50,7 +50,7 @@ export const CONTROLS = {
   MOVE_LEFT: 'ArrowLeft',
   MOVE_RIGHT: 'ArrowRight',
   SPEED_UP: 'ArrowDown',
-  PAUSE: ' ', // Space
+  PAUSE: ' ', 
   RESET: 'r'
 } as const;
 

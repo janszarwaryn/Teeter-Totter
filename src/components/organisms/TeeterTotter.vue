@@ -10,7 +10,6 @@
         class="board"
         :class="{ stabilized: isStabilized }"
       >
-        <!-- Linie pomocnicze dla pozycjonowania -->
         <div class="grid-lines">
           <div v-for="i in 20" :key="i" class="grid-line"></div>
         </div>
@@ -114,4 +113,4 @@ defineProps<{
   50% { transform: translateX(-50%) scale(1.2); }
   100% { transform: translateX(-50%) scale(1); }
 }
-</style> 
+</style>
