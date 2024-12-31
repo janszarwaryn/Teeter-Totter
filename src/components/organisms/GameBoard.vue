@@ -22,6 +22,7 @@
       class="game-area"
       tabindex="0"
       @keydown="handleKeyPress"
+      @keyup="handleKeyUp"
       ref="gameArea"
     >
       <div class="game-objects">
@@ -256,53 +257,67 @@ const gameLoop = (timestamp: number) => {
   const deltaTime = timestamp - (lastTimestamp.value || timestamp);
   lastTimestamp.value = timestamp;
 
-  // Oblicz prędkość spadania
-  const baseSpeed = pressedKeys.value.includes(CONTROLS.SPEED_UP) ? 
-    GAME_CONFIG.PHYSICS.SPEED_UP_MULTIPLIER : 
-    GAME_CONFIG.PHYSICS.INITIAL_FALL_SPEED;
+  // Oblicz prędkość spadania tylko dla nieosiągniętych obiektów
+  if (!store.currentObject.isPlaced) {
+    const baseSpeed = pressedKeys.value.includes(CONTROLS.SPEED_UP) ? 
+      GAME_CONFIG.PHYSICS.SPEED_UP_MULTIPLIER : 
+      GAME_CONFIG.PHYSICS.INITIAL_FALL_SPEED;
 
-  // Dodaj bardzo małe przyspieszenie
-  const acceleration = GAME_CONFIG.PHYSICS.FALL_ACCELERATION * (deltaTime / 1000);
-  const fallSpeed = Math.min(
-    baseSpeed + acceleration,
-    GAME_CONFIG.PHYSICS.MAX_FALL_SPEED
-  );
-
-  // Aktualizuj pozycję z mniejszym krokiem
-  store.currentObject.position.y += fallSpeed * (deltaTime / 16); // Normalizacja do 60 FPS
-
-  // Sprawdź kolizje
-  const objectHeight = store.currentObject.size.height;
-  const objectBottom = store.currentObject.position.y + (objectHeight / 2);
-
-  if (objectBottom >= GAME_CONFIG.BOARD.SURFACE_Y) {
-    const isOverTeeterTotter = isObjectOverTeeterTotter(
-      store.currentObject.position,
-      store.currentObject.size.width
+    const acceleration = GAME_CONFIG.PHYSICS.FALL_ACCELERATION * (deltaTime / 1000);
+    const fallSpeed = Math.min(
+      baseSpeed + acceleration,
+      GAME_CONFIG.PHYSICS.MAX_FALL_SPEED
     );
 
-    if (isOverTeeterTotter) {
-      store.currentObject.position.y = GAME_CONFIG.BOARD.SURFACE_Y - (objectHeight / 2);
-      store.placeObject();
-    } else {
-      store.throwsLeft--;
-      store.currentObject = null;
-      if (store.throwsLeft <= 0) {
-        handleGameOver('throws');
+    // Aktualizuj pozycję tylko dla spadających obiektów
+    store.currentObject.position.y += fallSpeed * (deltaTime / 16);
+
+    // Sprawdź kolizje z huśtawką
+    const objectHeight = store.currentObject.size.height;
+    const objectBottom = store.currentObject.position.y + (objectHeight / 2);
+
+    if (objectBottom >= GAME_CONFIG.BOARD.SURFACE_Y) {
+      const isOverTeeterTotter = isObjectOverTeeterTotter(
+        store.currentObject.position,
+        store.currentObject.size.width
+      );
+
+      if (isOverTeeterTotter) {
+        // Ustaw dokładną pozycję i umieść obiekt
+        store.currentObject.position.y = GAME_CONFIG.BOARD.SURFACE_Y - (objectHeight / 2);
+        store.placeObject();
+        
+        // Sprawdź warunki końca gry
+        if (store.throwsLeft <= 0) {
+          handleGameOver('throws');
+        } else if (Math.abs(store.bendingAngle) >= GAME_CONFIG.PHYSICS.MAX_ANGLE) {
+          handleGameOver('balance');
+        }
+      } else {
+        // Obiekt spadł poza huśtawkę
+        store.throwsLeft--;
+        store.currentObject = null;
+        
+        if (store.throwsLeft <= 0) {
+          handleGameOver('throws');
+        }
       }
+      return;
     }
-  }
 
-  // Sprawdź czy huśtawka nie jest za bardzo przechylona
-  if (Math.abs(store.bendingAngle) >= GAME_CONFIG.PHYSICS.MAX_ANGLE) {
-    handleGameOver('balance');
-    return;
-  }
-
-  // Sprawdź czy nie skończyły się rzuty
-  if (store.throwsLeft <= 0) {
-    handleGameOver('throws');
-    return;
+    // Aktualizuj kąt huśtawki podczas spadania
+    const tempLeftObjects = [...store.leftObjects];
+    const tempRightObjects = [...store.rightObjects];
+    
+    if (store.currentObject.position.x < GAME_CONFIG.BOARD.WIDTH / 2) {
+      tempLeftObjects.push(store.currentObject);
+    } else {
+      tempRightObjects.push(store.currentObject);
+    }
+    
+    const leftMoment = calculateTotalMoment(tempLeftObjects);
+    const rightMoment = calculateTotalMoment(tempRightObjects);
+    store.bendingAngle = calculateBendingAngle(leftMoment, rightMoment);
   }
 };
 
@@ -493,7 +508,7 @@ onUnmounted(() => {
 <style scoped>
 .game-board {
   width: 100%;
-  height: 100%;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -501,29 +516,16 @@ onUnmounted(() => {
   position: relative;
   padding: 20px;
   box-sizing: border-box;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
 }
 
 .game-area {
   width: 1000px;
   height: 600px;
   position: relative;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.05);
   border-radius: 12px;
   overflow: hidden;
   outline: none;
-  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.1);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.game-area:focus {
-  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.1),
-              0 0 0 2px rgba(255, 255, 255, 0.5);
 }
 
 .game-objects {
@@ -533,7 +535,6 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   pointer-events: none;
-  z-index: 1;
 }
 
 :deep(.falling) {

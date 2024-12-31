@@ -1,8 +1,18 @@
 <template>
   <div class="control-panel">
     <div class="scores">
-      <Score label="Score" :value="score" />
-      <Score label="High Score" :value="highScore" />
+      <Score 
+        label="Score" 
+        :value="score"
+        :base-points="basePoints"
+        :bonus-points="bonusPoints"
+        :breakdown="true"
+      />
+      <Score 
+        label="High Score" 
+        :value="highScore" 
+        :is-high-score="true"
+      />
       <div class="throws-info">
         <span class="throws-label">Throws:</span>
         <span class="throws-count" :class="{ 'low-throws': throwsLeft <= 1 }">
@@ -146,6 +156,16 @@ defineExpose({
     timerRef.value?.addBonus(seconds);
   }
 });
+
+const basePoints = computed(() => {
+  if (!props.isPlaying) return 0;
+  const timePoints = timerRef.value?.currentTime || 0;
+  return Math.floor(timePoints * 5);
+});
+
+const bonusPoints = computed(() => {
+  return props.score - basePoints.value;
+});
 </script>
 
 <style scoped>
@@ -281,5 +301,27 @@ defineExpose({
   background: #4ecdc4;
   transition: width 0.3s ease-out;
   box-shadow: 0 0 8px rgba(78, 205, 196, 0.5);
+}
+
+.bonus-indicator {
+  color: #27ae60;
+  font-weight: bold;
+  animation: fadeUp 0.5s ease-out;
+}
+
+.score-breakdown {
+  font-size: 0.8em;
+  color: #7f8c8d;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style> 

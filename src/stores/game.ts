@@ -121,25 +121,50 @@ export const useGameStore = defineStore('game', {
     },
 
     placeObject() {
-      if (!this.currentObject) return;
+      if (!this.currentObject || this.currentObject.isPlaced) return;
 
+      // Najpierw oznaczamy obiekt jako umieszczony
       this.currentObject.isPlaced = true;
+
+      // Dodaj obiekt do odpowiedniej tablicy
       if (this.currentObject.position.x < GAME_CONFIG.BOARD.WIDTH / 2) {
         this.leftObjects.push({ ...this.currentObject });
       } else {
         this.rightObjects.push({ ...this.currentObject });
       }
-      
+
+      // Przelicz kąt huśtawki
       this.recalculateBendingAngle();
-      
-      // Bonus za dobre umieszczenie obiektu
-      if (Math.abs(this.bendingAngle) < 10) {
-        this.addBonusPoints(300);
-      } else if (Math.abs(this.bendingAngle) < 20) {
+
+      // Nalicz punkty tylko raz
+      this.addBonusPoints(50); // Podstawowe punkty
+
+      // Bonus za precyzję
+      const distanceFromCenter = Math.abs(
+        this.currentObject.position.x - GAME_CONFIG.BOARD.WIDTH / 2
+      );
+      if (distanceFromCenter < 50) {
         this.addBonusPoints(100);
       }
-      
+
+      // Bonus za balans
+      const currentAngle = Math.abs(this.bendingAngle);
+      if (currentAngle < 5) {
+        this.addBonusPoints(200);
+      } else if (currentAngle < 10) {
+        this.addBonusPoints(100);
+      } else if (currentAngle < 15) {
+        this.addBonusPoints(50);
+      }
+
+      // Zmniejsz liczbę rzutów i wyczyść obecny obiekt
+      this.throwsLeft--;
       this.currentObject = null;
+
+      // Spawnuj nowy obiekt jeśli gra się nie skończyła
+      if (this.throwsLeft > 0 && Math.abs(this.bendingAngle) < GAME_CONFIG.PHYSICS.MAX_ANGLE) {
+        this.spawnNewObject();
+      }
     },
 
     recalculateBendingAngle() {
@@ -156,33 +181,40 @@ export const useGameStore = defineStore('game', {
     updateScore(time: number) {
       this.gameTime = time;
       
-      // Podstawowe punkty za czas
-      const timePoints = Math.floor(time * 10);
+      // 1. Punkty bazowe za czas
+      const timePoints = Math.floor(time * 5); // 5 punktów za sekundę
       
-      // Bonus za stabilność
+      // 2. Bonus za stabilność całkowitą
       const stabilityBonus = Math.abs(this.bendingAngle) < 10 ? 1000 : 
                             Math.abs(this.bendingAngle) < 20 ? 500 : 0;
       
-      // Bonus za ilość obiektów i ich balans
-      const totalObjects = this.leftObjects.length + this.rightObjects.length;
-      const objectsBonus = totalObjects * 100;
+      // 3. Bonus za ilość obiektów
+      const objectCount = this.leftObjects.length + this.rightObjects.length;
+      const objectsBonus = objectCount * 100;
       
-      // Obliczamy rzeczywisty balans momentów
-      const leftMoment = this.leftObjects.reduce((sum, obj) => sum + obj.weight, 0);
-      const rightMoment = this.rightObjects.reduce((sum, obj) => sum + obj.weight, 0);
-      const momentDifference = Math.abs(leftMoment - rightMoment);
+      // 4. Bonus za balans wag
+      const leftWeight = this.leftObjects.reduce((sum, obj) => sum + obj.weight, 0);
+      const rightWeight = this.rightObjects.reduce((sum, obj) => sum + obj.weight, 0);
+      const weightDifference = Math.abs(leftWeight - rightWeight);
       
-      // Bonus za dobry balans wag
-      const balanceBonus = momentDifference < 2 ? 1000 :
-                          momentDifference < 4 ? 500 : 0;
+      const balanceBonus = weightDifference < 2 ? 2000 :
+                          weightDifference < 4 ? 1000 :
+                          weightDifference < 6 ? 500 : 0;
       
+      // 5. Bonus za fazę gry
+      const phaseIndex = Object.values(GAME_PHASES).findIndex(
+        phase => phase.name === getCurrentPhase(this.score).name
+      );
+      const phaseBonus = phaseIndex * 1000;
+
       // Oblicz całkowity wynik
       this.score = Math.floor(
-        timePoints + 
-        this.bonusPoints + 
-        objectsBonus + 
-        stabilityBonus + 
-        balanceBonus
+        timePoints +           // Punkty za czas
+        this.bonusPoints +     // Zebrane bonusy
+        objectsBonus +         // Bonus za ilość obiektów
+        stabilityBonus +       // Bonus za stabilność
+        balanceBonus +        // Bonus za balans wag
+        phaseBonus            // Bonus za osiągniętą fazę
       );
       
       // Zapisz najlepszy wynik
@@ -193,6 +225,7 @@ export const useGameStore = defineStore('game', {
 
     addBonusPoints(points: number) {
       this.bonusPoints += points;
+      this.score += points; // Natychmiast aktualizuj wynik
     },
 
     toggleAutoPlay() {

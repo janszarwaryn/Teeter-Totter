@@ -2,7 +2,7 @@ export const GAME_CONFIG = {
   BOARD: {
     WIDTH: 1000,
     HEIGHT: 600,
-    SURFACE_Y: 450,
+    SURFACE_Y: 520,
     GRID_INCREMENT: 50
   },
   PHYSICS: {
@@ -12,7 +12,8 @@ export const GAME_CONFIG = {
     SPEED_UP_MULTIPLIER: 3,
     SPAWN_INTERVAL: 0,
     FALL_ACCELERATION: 0.5,
-    MAX_FALL_SPEED: 10
+    MAX_FALL_SPEED: 10,
+    TEETER_TOTTER_WIDTH: 0.6
   },
   GAME_RULES: {
     MAX_GAME_TIME: 180, // 3 minuty w sekundach

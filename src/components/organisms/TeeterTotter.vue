@@ -40,7 +40,7 @@ defineProps<{
   bottom: 50px;
   left: 0;
   right: 0;
-  height: 200px;
+  height: 100px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -49,7 +49,7 @@ defineProps<{
 
 .teeter-totter {
   position: relative;
-  width: 800px;
+  width: 600px;
   height: 100%;
   transform-origin: center bottom;
   transition: transform 0.3s ease-out;
@@ -57,7 +57,7 @@ defineProps<{
 
 .board {
   width: 100%;
-  height: 20px;
+  height: 15px;
   background: #34495e;
   border-radius: 4px;
   position: relative;
@@ -89,8 +89,8 @@ defineProps<{
   position: absolute;
   bottom: 0;
   left: 50%;
-  width: 40px;
-  height: 80px;
+  width: 30px;
+  height: 60px;
   background: linear-gradient(to bottom, #7f8c8d, #95a5a6);
   transform: translateX(-50%);
   clip-path: polygon(0% 0%, 100% 0%, 50% 100%);
