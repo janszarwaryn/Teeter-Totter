@@ -13,6 +13,12 @@ export const GAME_CONFIG = {
     SPAWN_INTERVAL: 0,
     FALL_ACCELERATION: 0.5,
     MAX_FALL_SPEED: 10
+  },
+  GAME_RULES: {
+    MAX_GAME_TIME: 180, // 3 minuty w sekundach
+    INITIAL_THROWS: 3,
+    MAX_ANGLE: 25, // maksymalny kąt przechylenia
+    CRITICAL_ANGLE_THRESHOLD: 0.85 // 85% maksymalnego kąta
   }
 } as const;
 

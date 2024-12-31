@@ -120,6 +120,53 @@
         :style="firework.style"
       ></div>
     </div>
+
+    <!-- Game Over Modal -->
+    <div v-if="store.isGameOver" class="game-over-modal">
+      <div class="game-over-content">
+        <h2>Game Over!</h2>
+        <p class="game-over-reason">{{ gameOverReason }}</p>
+        
+        <div class="stats-container">
+          <div class="stat-item">
+            <span class="stat-label">Time Played:</span>
+            <span class="stat-value">{{ formatTime(store.gameTime) }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Final Score:</span>
+            <span class="stat-value">{{ store.score }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Score Breakdown:</span>
+            <div class="score-breakdown">
+              <div>Time Bonus: {{ timeBonus }}</div>
+              <div>Stability: {{ stabilityBonus }}</div>
+              <div>Objects: {{ objectsBonus }}</div>
+              <div>Phase: {{ phaseBonus }}</div>
+            </div>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Objects Placed:</span>
+            <span class="stat-value">{{ store.leftObjects.length + store.rightObjects.length }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Phase Reached:</span>
+            <span class="stat-value">{{ getCurrentPhase(store.score).name }}</span>
+          </div>
+        </div>
+
+        <p v-if="isWinner" class="new-record">New Record! 🏆</p>
+        <p class="previous-record" v-if="!isWinner">
+          Best Score: {{ store.highScore }}
+        </p>
+
+        <div class="game-over-actions">
+          <button class="retry-button" @click="handleReset">Play Again</button>
+          <button class="menu-button" @click="handleMainMenu">Main Menu</button>
+          <button class="share-button" @click="shareScore">Share Score</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -139,6 +186,7 @@ const gameArea = ref<HTMLElement | null>(null);
 const controlPanelRef = ref<InstanceType<typeof ControlPanel> | null>(null);
 const showConfetti = ref(false);
 const isWinner = ref(false);
+const lastTimestamp = ref<number>(0);
 const pressedKeys = ref<string[]>([]);
 
 let spawnTimeout: number;
@@ -201,24 +249,39 @@ const gameLoop = (timestamp: number) => {
 
   if (!store.currentObject) {
     store.spawnNewObject();
+    lastTimestamp.value = timestamp;
     return;
   }
 
-  // Aktualizuj pozycję spadającego obiektu
-  const speed = pressedKeys.value.includes(CONTROLS.SPEED_UP) ? 
+  const deltaTime = timestamp - (lastTimestamp.value || timestamp);
+  lastTimestamp.value = timestamp;
+
+  // Oblicz prędkość spadania
+  const baseSpeed = pressedKeys.value.includes(CONTROLS.SPEED_UP) ? 
     GAME_CONFIG.PHYSICS.SPEED_UP_MULTIPLIER : 
     GAME_CONFIG.PHYSICS.INITIAL_FALL_SPEED;
 
-  // Aktualizuj pozycję Y
-  const newY = store.currentObject.position.y + speed;
-  store.currentObject.position.y = newY;
+  // Dodaj bardzo małe przyspieszenie
+  const acceleration = GAME_CONFIG.PHYSICS.FALL_ACCELERATION * (deltaTime / 1000);
+  const fallSpeed = Math.min(
+    baseSpeed + acceleration,
+    GAME_CONFIG.PHYSICS.MAX_FALL_SPEED
+  );
+
+  // Aktualizuj pozycję z mniejszym krokiem
+  store.currentObject.position.y += fallSpeed * (deltaTime / 16); // Normalizacja do 60 FPS
 
   // Sprawdź kolizje
   const objectHeight = store.currentObject.size.height;
-  const objectBottom = newY + (objectHeight / 2);
+  const objectBottom = store.currentObject.position.y + (objectHeight / 2);
 
   if (objectBottom >= GAME_CONFIG.BOARD.SURFACE_Y) {
-    if (isObjectOverTeeterTotter(store.currentObject.position, store.currentObject.size.width)) {
+    const isOverTeeterTotter = isObjectOverTeeterTotter(
+      store.currentObject.position,
+      store.currentObject.size.width
+    );
+
+    if (isOverTeeterTotter) {
       store.currentObject.position.y = GAME_CONFIG.BOARD.SURFACE_Y - (objectHeight / 2);
       store.placeObject();
     } else {
@@ -229,42 +292,65 @@ const gameLoop = (timestamp: number) => {
       }
     }
   }
+
+  // Sprawdź czy huśtawka nie jest za bardzo przechylona
+  if (Math.abs(store.bendingAngle) >= GAME_CONFIG.PHYSICS.MAX_ANGLE) {
+    handleGameOver('balance');
+    return;
+  }
+
+  // Sprawdź czy nie skończyły się rzuty
+  if (store.throwsLeft <= 0) {
+    handleGameOver('throws');
+    return;
+  }
 };
 
 const handleTimeUp = () => {
   if (!store.isGameOver) {
-    store.endGame();
+    handleGameOver('time');
   }
 };
 
 const handleGameOver = (reason: 'balance' | 'throws' | 'time') => {
   if (store.isGameOver) return;
-  cancelAnimationFrame(animationFrameId);
-  const finalTime = controlPanelRef.value?.getTime() || 0;
   
-  // Oblicz końcowy wynik
-  const timeBonus = finalTime * 10;
-  const stabilityBonus = Math.abs(store.bendingAngle) < 10 ? 1000 : 0;
-  const objectsBonus = (store.leftObjects.length + store.rightObjects.length) * 100;
-  const phaseBonus = Object.values(GAME_PHASES).findIndex(
+  cancelAnimationFrame(animationFrameId);
+  const finalTime = store.gameTime;
+
+  // Przygotuj komunikaty końca gry
+  const reasons = {
+    throws: 'No throws left! Game Over!',
+    balance: 'Teeter-totter lost balance! Game Over!',
+    time: 'Time\'s up! Game Over!'
+  };
+  
+  gameOverReason.value = reasons[reason];
+
+  // Oblicz bonusy końcowe
+  timeBonus.value = Math.floor(finalTime * 10);
+  stabilityBonus.value = Math.abs(store.bendingAngle) < 10 ? 1000 : 0;
+  objectsBonus.value = (store.leftObjects.length + store.rightObjects.length) * 100;
+  phaseBonus.value = Object.values(GAME_PHASES).findIndex(
     phase => phase.name === getCurrentPhase(store.score).name
   ) * 1000;
-  
-  store.addBonusPoints(timeBonus + stabilityBonus + objectsBonus + phaseBonus);
-  store.updateScore(finalTime);
-  
+
+  // Dodaj bonusy do wyniku
+  const totalBonus = timeBonus.value + stabilityBonus.value + 
+    objectsBonus.value + phaseBonus.value;
+  store.addBonusPoints(totalBonus);
+
+  // Sprawdź czy jest nowy rekord
   if (store.score > store.highScore) {
     store.highScore = store.score;
     showConfetti.value = true;
     isWinner.value = true;
     createFireworks();
   }
-  
+
+  // Zakończ grę i pokaż modal
   store.endGame();
   store.setGameOverReason(reason);
-  setTimeout(() => {
-    showGameOver.value = true;
-  }, 500);
 };
 
 const createFireworks = () => {
@@ -310,7 +396,7 @@ const getNextPhaseThreshold = (score: number) => {
   if (currentIndex < phases.length - 1) {
     return phases[currentIndex + 1].scoreRange[0];
   }
-  return '���';
+  return '';
 };
 
 const getPhaseProgress = (score: number) => {
@@ -348,6 +434,7 @@ const timeBonus = ref(0);
 const stabilityBonus = ref(0);
 const objectsBonus = ref(0);
 const phaseBonus = ref(0);
+const gameOverReason = ref('');
 
 const calculateBonuses = (finalTime: number) => {
   timeBonus.value = finalTime * 10;
@@ -377,6 +464,13 @@ const shareScore = () => {
     navigator.clipboard.writeText(text);
     // Pokaż powiadomienie o skopiowaniu
   }
+};
+
+const showGameOverModal = ref(false);
+
+const handleMainMenu = () => {
+  showGameOverModal.value = false;
+  store.reset();
 };
 
 onMounted(() => {
@@ -672,5 +766,114 @@ onUnmounted(() => {
   gap: 10px;
   margin-top: 20px;
   justify-content: center;
+}
+
+.game-over-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.game-over-content {
+  background: white;
+  padding: 2rem;
+  border-radius: 1rem;
+  text-align: center;
+  min-width: 300px;
+  animation: slideIn 0.5s ease-out;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.game-over-content h2 {
+  color: #e74c3c;
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+.game-over-reason {
+  color: #7f8c8d;
+  font-size: 1.2rem;
+  margin-bottom: 1.5rem;
+}
+
+.game-stats {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.game-stats p {
+  margin: 0.5rem 0;
+  color: #2c3e50;
+}
+
+.game-over-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.game-over-actions button {
+  padding: 0.8rem 1.5rem;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.retry-button {
+  background: #3498db;
+  color: white;
+}
+
+.retry-button:hover {
+  background: #2980b9;
+  transform: translateY(-2px);
+}
+
+.menu-button {
+  background: #95a5a6;
+  color: white;
+}
+
+.menu-button:hover {
+  background: #7f8c8d;
+  transform: translateY(-2px);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.share-button {
+  background: #2ecc71;
+  color: white;
+}
+
+.share-button:hover {
+  background: #27ae60;
+  transform: translateY(-2px);
 }
 </style> 

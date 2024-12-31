@@ -68,6 +68,11 @@ export const useGameStore = defineStore('game', {
     endGame() {
       this.status = GameStatus.GAME_OVER;
       this.currentObject = null;
+      
+      // Zapisz najlepszy wynik jeśli obecny jest wyższy
+      if (this.score > this.highScore) {
+        this.highScore = this.score;
+      }
     },
 
     spawnNewObject() {
