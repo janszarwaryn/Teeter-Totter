@@ -37,7 +37,7 @@ defineProps<{
 <style scoped>
 .teeter-totter-container {
   position: absolute;
-  bottom: 50px;
+  bottom: 20px;
   left: 0;
   right: 0;
   height: 100px;

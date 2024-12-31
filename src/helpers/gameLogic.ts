@@ -1,14 +1,23 @@
 import { ShapeType, GAME_CONFIG, GAME_PHASES } from '@/constants/gameConstants';
 import type { GameObject } from '@/types/game';
 
-export const generateRandomObject = (currentScore: number): GameObject => {
-  const currentPhase = getCurrentPhase(currentScore);
+export const generateRandomObject = (score: number): GameObject => {
+  const currentPhase = getCurrentPhase(score);
   
-  // Zwiększamy rozmiary obiektów
-  const baseSize = 40; // Bazowy rozmiar
-  const weight = Math.floor(
-    Math.random() * (currentPhase.weights.max - currentPhase.weights.min + 1)
-  ) + currentPhase.weights.min;
+  // Określ zakres wag dla wszystkich poprzednich faz i obecnej
+  const availableWeights: { min: number; max: number }[] = [];
+  
+  Object.values(GAME_PHASES).forEach(phase => {
+    if (phase.scoreRange[0] <= score) {
+      availableWeights.push(phase.weights);
+    }
+  });
+  
+  // Losowo wybierz jeden z dostępnych zakresów wag
+  const selectedRange = availableWeights[Math.floor(Math.random() * availableWeights.length)];
+  
+  // Generuj wagę z wybranego zakresu
+  const weight = Number((selectedRange.min + Math.random() * (selectedRange.max - selectedRange.min)).toFixed(1));
   
   const type = Object.values(ShapeType)[
     Math.floor(Math.random() * Object.values(ShapeType).length)
@@ -16,8 +25,8 @@ export const generateRandomObject = (currentScore: number): GameObject => {
   
   // Oblicz rozmiar na podstawie wagi
   const sizeMultiplier = weight / currentPhase.weights.min;
-  let width = baseSize * sizeMultiplier;
-  let height = baseSize * sizeMultiplier;
+  let width = 40 * sizeMultiplier;
+  let height = 40 * sizeMultiplier;
   
   // Dostosuj wymiary w zależności od typu
   switch (type) {
@@ -62,4 +71,13 @@ export const getCurrentPhase = (score: number) => {
   return Object.values(GAME_PHASES).find(
     phase => score >= phase.scoreRange[0] && score <= phase.scoreRange[1]
   ) || GAME_PHASES.PHASE_1;
+};
+
+export const getNextPhase = (score: number) => {
+  const phases = Object.values(GAME_PHASES);
+  const currentPhaseIndex = phases.findIndex(
+    phase => phase.scoreRange[0] <= score && score <= phase.scoreRange[1]
+  );
+  
+  return phases[currentPhaseIndex + 1];
 }; 

@@ -13,6 +13,10 @@ const props = defineProps<{
   initialTime?: number;
 }>();
 
+const emit = defineEmits<{
+  (e: 'time-up'): void;
+}>();
+
 const timeElapsed = ref(0);
 let timerId: number | null = null;
 
@@ -62,7 +66,19 @@ onUnmounted(() => {
   stopTimer();
 });
 
+interface TimerInstance {
+  currentTime: number;
+  resetTimer: () => void;
+  start: () => void;
+  pause: () => void;
+  getTime: () => number;
+  addBonus: (seconds: number) => void;
+}
+
 defineExpose({
+  get currentTime() {
+    return timeElapsed.value;
+  },
   resetTimer,
   start,
   pause,
@@ -70,7 +86,7 @@ defineExpose({
   addBonus: (seconds: number) => {
     timeElapsed.value += seconds;
   }
-});
+} satisfies TimerInstance);
 </script>
 
 <style scoped>

@@ -8,6 +8,7 @@
 
 <script setup lang="ts">
 import GameBoard from '@/components/organisms/GameBoard.vue';
+console.log('App.vue mounted');
 </script>
 
 <style>
@@ -18,34 +19,25 @@ html, body {
   height: 100%;
   font-family: Arial, sans-serif;
   background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-}
-
-body {
   overflow: hidden;
-  display: flex;
-  justify-content: center;
-  align-items: center;
 }
 
 .app {
   width: 100%;
-  height: 100%;
+  height: 100vh;
   display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 20px;
+  flex-direction: column;
+  padding: 0;
   box-sizing: border-box;
 }
 
 .game-container {
-  width: 1200px;
-  height: 800px;
-  min-width: 1000px;
-  min-height: 700px;
+  flex: 1;
+  width: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
-  margin: 0 auto;
   box-sizing: border-box;
+  padding: 20px;
 }
 </style>

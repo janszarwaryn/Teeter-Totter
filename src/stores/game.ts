@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
-import { GameStatus, GAME_CONFIG } from '@/constants/gameConstants';
+import { GameStatus, GAME_CONFIG, GAME_PHASES } from '@/constants/gameConstants';
 import type { GameState, GameObject, Direction } from '@/types/game';
-import { generateRandomObject, getInitialPosition } from '@/helpers/gameLogic';
+import { generateRandomObject, getInitialPosition, getCurrentPhase } from '@/helpers/gameLogic';
 import { calculateTotalMoment, calculateBendingAngle, isGameOver } from '@/helpers/physics';
 
 export const useGameStore = defineStore('game', {
@@ -76,28 +76,22 @@ export const useGameStore = defineStore('game', {
     },
 
     spawnNewObject() {
-      console.log('Attempting to spawn new object');
-      if (this.currentObject || !this.isPlaying) {
-        console.log('Cannot spawn: ', {
-          hasCurrentObject: !!this.currentObject,
-          isPlaying: this.isPlaying
-        });
-        return;
-      }
+      if (this.currentObject || !this.isPlaying) return;
       
       try {
         const newObject = generateRandomObject(this.score);
-        const side = Math.random() < 0.5 ? 'left' : 'right';
         
-        // Ustaw początkową pozycję
-        const x = getInitialPosition(side);
-        newObject.position = {
-          x: x,
-          y: -newObject.size.height // Zacznij powyżej widocznego obszaru
+        // Ustaw początkową pozycję dokładnie nad środkiem huśtawki
+        const spawnPosition = {
+          x: GAME_CONFIG.BOARD.WIDTH / 2, // Środek planszy
+          y: 0 // Góra planszy
         };
-        
-        this.currentObject = { ...newObject };
-        console.log('Successfully spawned:', this.currentObject);
+
+        this.currentObject = {
+          ...newObject,
+          position: spawnPosition,
+          fallSpeed: GAME_CONFIG.PHYSICS.INITIAL_FALL_SPEED
+        };
       } catch (error) {
         console.error('Error spawning object:', error);
       }
@@ -106,17 +100,13 @@ export const useGameStore = defineStore('game', {
     moveObject(direction: Direction) {
       if (!this.currentObject || !this.isPlaying) return;
       
-      const movement = GAME_CONFIG.BOARD.GRID_INCREMENT / 2;
-      const currentX = this.currentObject.position.x;
-      const newX = direction === 'left' 
-        ? currentX - movement 
-        : currentX + movement;
+      const movement = direction === 'left' ? -15 : 15;
+      const newX = this.currentObject.position.x + movement;
       
-      // Sprawdzamy granice planszy
-      const minX = this.currentObject.size.width / 2;
-      const maxX = GAME_CONFIG.BOARD.WIDTH - this.currentObject.size.width / 2;
+      // Ograniczenie ruchu do szerokości huśtawki
+      const minX = (GAME_CONFIG.BOARD.WIDTH / 2) - (GAME_CONFIG.BOARD.TEETER_TOTTER.WIDTH / 3);
+      const maxX = (GAME_CONFIG.BOARD.WIDTH / 2) + (GAME_CONFIG.BOARD.TEETER_TOTTER.WIDTH / 3);
       
-      // Aktualizujemy pozycję
       this.currentObject.position.x = Math.max(minX, Math.min(newX, maxX));
     },
 
@@ -157,12 +147,10 @@ export const useGameStore = defineStore('game', {
         this.addBonusPoints(50);
       }
 
-      // Zmniejsz liczbę rzutów i wyczyść obecny obiekt
-      this.throwsLeft--;
       this.currentObject = null;
 
       // Spawnuj nowy obiekt jeśli gra się nie skończyła
-      if (this.throwsLeft > 0 && Math.abs(this.bendingAngle) < GAME_CONFIG.PHYSICS.MAX_ANGLE) {
+      if (Math.abs(this.bendingAngle) < GAME_CONFIG.PHYSICS.MAX_ANGLE) {
         this.spawnNewObject();
       }
     },

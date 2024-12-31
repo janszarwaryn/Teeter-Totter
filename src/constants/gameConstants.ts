@@ -1,9 +1,13 @@
 export const GAME_CONFIG = {
   BOARD: {
-    WIDTH: 1000,
-    HEIGHT: 600,
-    SURFACE_Y: 520,
-    GRID_INCREMENT: 50
+    WIDTH: 1200,
+    HEIGHT: 800,
+    SURFACE_Y: 600,
+    TEETER_TOTTER: {
+      WIDTH: 600,
+      CENTER_X: 600,
+      Y: 600
+    }
   },
   PHYSICS: {
     COLLISION_THRESHOLD: 1,
@@ -48,22 +52,22 @@ export const CONTROLS = {
 export const GAME_PHASES = {
   PHASE_1: {
     name: 'Phase 1 - Light',
-    scoreRange: [0, 30],
-    weights: { min: 1, max: 2 }
+    scoreRange: [0, 500],
+    weights: { min: 0.5, max: 2 }
   },
   PHASE_2: {
     name: 'Phase 2 - Medium',
-    scoreRange: [31, 60],
-    weights: { min: 2, max: 4 }
+    scoreRange: [501, 1500],
+    weights: { min: 2, max: 3 }
   },
   PHASE_3: {
     name: 'Phase 3 - Heavy',
-    scoreRange: [61, 90],
-    weights: { min: 3, max: 6 }
+    scoreRange: [1501, 3000],
+    weights: { min: 3, max: 5 }
   },
   PHASE_4: {
     name: 'Phase 4 - Expert',
-    scoreRange: [91, Infinity],
+    scoreRange: [3001, Infinity],
     weights: { min: 4, max: 8 }
   }
 } as const; 

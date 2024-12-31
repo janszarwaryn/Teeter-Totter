@@ -46,7 +46,7 @@ export const isBalanceCritical = (angle: number): boolean => {
 };
 
 export const updateFallSpeed = (currentSpeed: number, deltaTime: number): number => {
-  const newSpeed = currentSpeed + (GAME_CONFIG.PHYSICS.ACCELERATION * deltaTime / 1000);
+  const newSpeed = currentSpeed + (GAME_CONFIG.PHYSICS.FALL_ACCELERATION * deltaTime / 1000);
   return Math.min(newSpeed, GAME_CONFIG.PHYSICS.MAX_FALL_SPEED);
 };
 
@@ -86,7 +86,9 @@ export const isObjectOverTeeterTotter = (
   objectWidth: number
 ): boolean => {
   const teeterTotterCenter = GAME_CONFIG.BOARD.WIDTH / 2;
-  const teeterTotterWidth = GAME_CONFIG.BOARD.WIDTH * 0.6; // 60% szerokości planszy
-  
-  return Math.abs(objectPosition.x - teeterTotterCenter) < teeterTotterWidth / 2;
+  const teeterTotterWidth = GAME_CONFIG.BOARD.WIDTH * GAME_CONFIG.PHYSICS.TEETER_TOTTER_WIDTH;
+  const margin = objectWidth / 2; // Margines zależny od szerokości obiektu
+
+  // Sprawdź tylko pozycję poziomą
+  return Math.abs(objectPosition.x - teeterTotterCenter) < (teeterTotterWidth / 2) + margin;
 }; 

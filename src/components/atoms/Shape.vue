@@ -6,10 +6,12 @@
       { 'falling': !isPlaced, 'placed': isPlaced }
     ]"
     :style="{
+      left: `${position.x}px`,
+      top: `${position.y}px`,
       width: `${size.width}px`,
       height: `${size.height}px`,
       backgroundColor: color,
-      transform: `translate(${position.x - size.width/2}px, ${position.y - size.height/2}px)`
+      transform: `translate(-50%, -50%)`
     }"
   >
     <div class="weight-badge">
