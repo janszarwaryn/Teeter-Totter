@@ -6,18 +6,23 @@ export const GAME_CONFIG = {
     TEETER_TOTTER: {
       WIDTH: 600,
       CENTER_X: 600,
-      Y: 600
+      Y: 600,
+      VALID_AREA: {
+        MIN_X: 240, // 20% szerokości planszy
+        MAX_X: 960  // 80% szerokości planszy
+      }
     }
   },
   PHYSICS: {
     COLLISION_THRESHOLD: 1,
     MAX_ANGLE: 25,
-    INITIAL_FALL_SPEED: 3,
+    INITIAL_FALL_SPEED: 1, // Zmniejszona z 3 na 1
     SPEED_UP_MULTIPLIER: 3,
     SPAWN_INTERVAL: 0,
-    FALL_ACCELERATION: 0.5,
-    MAX_FALL_SPEED: 10,
-    TEETER_TOTTER_WIDTH: 0.6
+    FALL_ACCELERATION: 0.2, // Zmniejszona z 0.5 na 0.2
+    MAX_FALL_SPEED: 5, // Zmniejszona z 10 na 5
+    TEETER_TOTTER_WIDTH: 0.6,
+    MOVEMENT_SPEED: 30 // Zwiększona z 20 na 30 dla lepszej kontroli
   },
   GAME_RULES: {
     MAX_GAME_TIME: 180, // 3 minuty w sekundach

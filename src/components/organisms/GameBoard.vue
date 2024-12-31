@@ -57,6 +57,16 @@
         :stabilization-time-left="store.stabilizationTimeLeft"
       />
     </div>
+
+    <GameOverModal
+      :show="store.isGameOver"
+      :score="store.score"
+      :high-score="store.highScore"
+      :reason="store.gameOverReason"
+      :is-new-high-score="store.score > store.highScore"
+      @restart="handleReset"
+      @close="handleReset"
+    />
   </div>
 </template>
 
@@ -66,6 +76,7 @@ import { useGameStore } from '@/stores/game';
 import Shape from '@/components/atoms/Shape.vue';
 import TeeterTotter from '@/components/organisms/TeeterTotter.vue';
 import ControlPanel from '@/components/molecules/ControlPanel.vue';
+import GameOverModal from '@/components/molecules/GameOverModal.vue';
 import { CONTROLS, GAME_CONFIG, GAME_PHASES } from '@/constants/gameConstants';
 import { getCurrentPhase } from '@/helpers/gameLogic';
 import { calculateTotalMoment, calculateBendingAngle, isObjectOverTeeterTotter } from '@/helpers/physics';
@@ -82,7 +93,8 @@ export default defineComponent({
   components: {
     Shape,
     TeeterTotter,
-    ControlPanel
+    ControlPanel,
+    GameOverModal
   },
   setup() {
     const store = useGameStore();
@@ -197,56 +209,19 @@ export default defineComponent({
 
     // Dodaj funkcję gameLoop
     const gameLoop = (timestamp: number) => {
-      if (!store.currentObject || !store.isPlaying || store.isPaused) {
+      if (!store.isPlaying || store.isPaused) {
+        lastTimestamp.value = timestamp;
         animationFrameId = requestAnimationFrame(gameLoop);
         return;
       }
 
-      const deltaTime = lastTimestamp.value ? timestamp - lastTimestamp.value : 16;
+      const deltaTime = timestamp - lastTimestamp.value;
       lastTimestamp.value = timestamp;
 
-      // Oblicz prędkość spadania
-      const baseSpeed = pressedKeys.value.includes(CONTROLS.SPEED_UP) ? 
-        GAME_CONFIG.PHYSICS.SPEED_UP_MULTIPLIER : 
-        GAME_CONFIG.PHYSICS.INITIAL_FALL_SPEED;
+      // Aktualizuj pozycję spadającego obiektu
+      store.updateObjectPosition(deltaTime);
 
-      // Użyj baseSpeed w obliczeniach
-      store.currentObject.position.y += baseSpeed * (deltaTime / 16);
-
-      // Sprawdź kolizje
-      const objectHeight = store.currentObject.size.height;
-      const objectBottom = store.currentObject.position.y + (objectHeight / 2);
-
-      // Sprawdź czy obiekt jest w obszarze huśtawki
-      if (objectBottom >= GAME_CONFIG.BOARD.SURFACE_Y - 20) {
-        const isOverTeeterTotter = isObjectOverTeeterTotter(
-          store.currentObject.position,
-          store.currentObject.size.width
-        );
-
-        if (isOverTeeterTotter) {
-          store.currentObject.position.y = GAME_CONFIG.BOARD.SURFACE_Y - (objectHeight / 2);
-          store.placeObject();
-          
-          if (Math.abs(store.bendingAngle) >= GAME_CONFIG.PHYSICS.MAX_ANGLE) {
-            handleGameOver('balance');
-          }
-        }
-      }
-      
-      // Sprawdź czy obiekt spadł poza planszę
-      if (objectBottom >= GAME_CONFIG.BOARD.HEIGHT) {
-        store.throwsLeft--;
-        store.currentObject = null;
-        
-        if (store.throwsLeft <= 0) {
-          handleGameOver('throws');
-        } else {
-          store.spawnNewObject();
-        }
-        return;
-      }
-
+      // Kontynuuj pętlę gry
       animationFrameId = requestAnimationFrame(gameLoop);
     };
 

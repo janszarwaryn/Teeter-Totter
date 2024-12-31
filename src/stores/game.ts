@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 import { GameStatus, GAME_CONFIG, GAME_PHASES } from '@/constants/gameConstants';
 import type { GameState, GameObject, Direction } from '@/types/game';
 import { generateRandomObject, getInitialPosition, getCurrentPhase } from '@/helpers/gameLogic';
-import { calculateTotalMoment, calculateBendingAngle, isGameOver } from '@/helpers/physics';
+import { calculateTotalMoment, calculateBendingAngle, isGameOver, isObjectOverTeeterTotter, updateFallSpeed } from '@/helpers/physics';
 
 export const useGameStore = defineStore('game', {
   state: (): GameState => ({
@@ -69,7 +69,6 @@ export const useGameStore = defineStore('game', {
       this.status = GameStatus.GAME_OVER;
       this.currentObject = null;
       
-      // Zapisz najlepszy wynik jeśli obecny jest wyższy
       if (this.score > this.highScore) {
         this.highScore = this.score;
       }
@@ -100,12 +99,14 @@ export const useGameStore = defineStore('game', {
     moveObject(direction: Direction) {
       if (!this.currentObject || !this.isPlaying) return;
       
-      const movement = direction === 'left' ? -15 : 15;
+      // Zwiększamy prędkość ruchu dla lepszej kontroli
+      const movement = direction === 'left' ? -GAME_CONFIG.PHYSICS.MOVEMENT_SPEED : GAME_CONFIG.PHYSICS.MOVEMENT_SPEED;
       const newX = this.currentObject.position.x + movement;
       
-      // Ograniczenie ruchu do szerokości huśtawki
-      const minX = (GAME_CONFIG.BOARD.WIDTH / 2) - (GAME_CONFIG.BOARD.TEETER_TOTTER.WIDTH / 3);
-      const maxX = (GAME_CONFIG.BOARD.WIDTH / 2) + (GAME_CONFIG.BOARD.TEETER_TOTTER.WIDTH / 3);
+      // Pozwalamy na ruch w całym zakresie planszy
+      const margin = 50; // Zwiększony margines dla łatwiejszego przesuwania poza huśtawkę
+      const minX = -margin; // Pozwalamy wyjść poza lewą krawędź
+      const maxX = GAME_CONFIG.BOARD.WIDTH + margin; // Pozwalamy wyjść poza prawą krawędź
       
       this.currentObject.position.x = Math.max(minX, Math.min(newX, maxX));
     },
@@ -113,45 +114,116 @@ export const useGameStore = defineStore('game', {
     placeObject() {
       if (!this.currentObject || this.currentObject.isPlaced) return;
 
-      // Najpierw oznaczamy obiekt jako umieszczony
-      this.currentObject.isPlaced = true;
-
-      // Dodaj obiekt do odpowiedniej tablicy
-      if (this.currentObject.position.x < GAME_CONFIG.BOARD.WIDTH / 2) {
-        this.leftObjects.push({ ...this.currentObject });
-      } else {
-        this.rightObjects.push({ ...this.currentObject });
-      }
-
-      // Przelicz kąt huśtawki
-      this.recalculateBendingAngle();
-
-      // Nalicz punkty tylko raz
-      this.addBonusPoints(50); // Podstawowe punkty
-
-      // Bonus za precyzję
-      const distanceFromCenter = Math.abs(
-        this.currentObject.position.x - GAME_CONFIG.BOARD.WIDTH / 2
+      const isOverTeeterTotter = isObjectOverTeeterTotter(
+        this.currentObject.position,
+        this.currentObject.size.width
       );
-      if (distanceFromCenter < 50) {
-        this.addBonusPoints(100);
+
+      // Sprawdź czy obiekt jest wystarczająco nisko (blisko powierzchni huśtawki)
+      const isNearSurface = this.currentObject.position.y >= GAME_CONFIG.BOARD.SURFACE_Y - 50;
+
+      // Jeśli obiekt jest poza huśtawką i jest blisko powierzchni
+      if (!isOverTeeterTotter && isNearSurface) {
+        // Zmniejsz liczbę dostępnych throws
+        this.throwsLeft--;
+        console.log('Throws left:', this.throwsLeft); // Debug
+
+        // Wyczyść aktualny obiekt
+        this.currentObject = null;
+
+        // Sprawdź warunek końca gry
+        if (this.throwsLeft <= 0) {
+          this.setGameOverReason('throws');
+          this.endGame();
+        } else {
+          // Spawnuj nowy obiekt tylko jeśli gra się nie skończyła
+          setTimeout(() => {
+            if (this.isPlaying) {
+              this.spawnNewObject();
+            }
+          }, 500);
+        }
+        return;
       }
 
-      // Bonus za balans
-      const currentAngle = Math.abs(this.bendingAngle);
-      if (currentAngle < 5) {
-        this.addBonusPoints(200);
-      } else if (currentAngle < 10) {
-        this.addBonusPoints(100);
-      } else if (currentAngle < 15) {
+      // Jeśli obiekt jest nad huśtawką i blisko powierzchni, umieść go
+      if (isOverTeeterTotter && isNearSurface) {
+        this.currentObject.isPlaced = true;
+        this.currentObject.position.y = GAME_CONFIG.BOARD.SURFACE_Y - (this.currentObject.size.height / 2);
+
+        if (this.currentObject.position.x < GAME_CONFIG.BOARD.WIDTH / 2) {
+          this.leftObjects.push({ ...this.currentObject });
+        } else {
+          this.rightObjects.push({ ...this.currentObject });
+        }
+
+        // Przelicz kąt huśtawki
+        this.recalculateBendingAngle();
+
+        // Nalicz punkty
         this.addBonusPoints(50);
+
+        // Bonus za precyzję
+        const distanceFromCenter = Math.abs(
+          this.currentObject.position.x - GAME_CONFIG.BOARD.WIDTH / 2
+        );
+        if (distanceFromCenter < 50) {
+          this.addBonusPoints(100);
+        }
+
+        // Bonus za balans
+        const currentAngle = Math.abs(this.bendingAngle);
+        if (currentAngle < 5) {
+          this.addBonusPoints(200);
+        } else if (currentAngle < 10) {
+          this.addBonusPoints(100);
+        } else if (currentAngle < 15) {
+          this.addBonusPoints(50);
+        }
+
+        // Wyczyść aktualny obiekt i spawnuj nowy
+        this.currentObject = null;
+        setTimeout(() => {
+          if (this.isPlaying) {
+            this.spawnNewObject();
+          }
+        }, 500);
       }
+    },
 
-      this.currentObject = null;
+    updateObjectPosition(deltaTime: number) {
+      if (!this.currentObject || !this.isPlaying) return;
 
-      // Spawnuj nowy obiekt jeśli gra się nie skończyła
-      if (Math.abs(this.bendingAngle) < GAME_CONFIG.PHYSICS.MAX_ANGLE) {
-        this.spawnNewObject();
+      // Konwertuj deltaTime na sekundy i zastosuj skalowanie
+      const deltaSeconds = deltaTime / 1000;
+      
+      // Aktualizuj prędkość spadania z mniejszym przyspieszeniem
+      this.currentObject.fallSpeed = Math.min(
+        this.currentObject.fallSpeed + (GAME_CONFIG.PHYSICS.FALL_ACCELERATION * deltaSeconds),
+        GAME_CONFIG.PHYSICS.MAX_FALL_SPEED
+      );
+
+      // Aktualizuj pozycję Y z płynniejszym ruchem
+      this.currentObject.position.y += this.currentObject.fallSpeed * deltaSeconds * 60;
+
+      // Sprawdź czy obiekt osiągnął powierzchnię
+      const isNearSurface = this.currentObject.position.y >= GAME_CONFIG.BOARD.SURFACE_Y - 50;
+      
+      if (isNearSurface) {
+        const isOverTeeterTotter = isObjectOverTeeterTotter(
+          this.currentObject.position,
+          this.currentObject.size.width
+        );
+        
+        if (!isOverTeeterTotter) {
+          // Jeśli obiekt jest poza huśtawką, daj więcej czasu na reakcję
+          this.currentObject.fallSpeed = Math.min(this.currentObject.fallSpeed, 2);
+        }
+        
+        // Wywołaj placeObject tylko gdy obiekt jest bardzo blisko powierzchni
+        if (this.currentObject.position.y >= GAME_CONFIG.BOARD.SURFACE_Y - (this.currentObject.size.height / 2)) {
+          this.placeObject();
+        }
       }
     },
 
